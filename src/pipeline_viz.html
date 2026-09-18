@@ -1,0 +1,156 @@
+<title>Progress Monitoring Pipeline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #12141a;
+    --surface: #1a1d24;
+    --surface-2: #20242d;
+    --border: #2e333d;
+    --text: #eceef2;
+    --text-dim: #939aa6;
+    --text-faint: #5f6672;
+    --accent: #ef8354;
+    --accent-soft: rgba(239, 131, 84, 0.14);
+    --wall: #969ca3;
+    --slab: #b0a898;
+    --beam: #7895ad;
+    --good: #5fb37a;
+    --bad: #d9704f;
+    --ghost: #4a4e58;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="light"]) {
+      --bg: #f2f0ea; --surface: #ffffff; --surface-2: #ece8dd; --border: #d9d3c5;
+      --text: #1b1d22; --text-dim: #63697a; --text-faint: #9298a6;
+      --accent: #cf5f28; --accent-soft: rgba(207,95,40,0.10);
+      --wall: #767c85; --slab: #8a8070; --beam: #45688a;
+      --good: #2f8a52; --bad: #b3492c; --ghost: #c7c2b5;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #f2f0ea; --surface: #ffffff; --surface-2: #ece8dd; --border: #d9d3c5;
+    --text: #1b1d22; --text-dim: #63697a; --text-faint: #9298a6;
+    --accent: #cf5f28; --accent-soft: rgba(207,95,40,0.10);
+    --wall: #767c85; --slab: #8a8070; --beam: #45688a;
+    --good: #2f8a52; --bad: #b3492c; --ghost: #c7c2b5;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    padding: 40px 20px 64px;
+  }
+  .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  main { max-width: 980px; margin: 0 auto; }
+
+  header { margin-bottom: 32px; }
+  header p.eyebrow {
+    margin: 0 0 6px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  h1 {
+    margin: 0 0 8px;
+    font-size: clamp(1.5rem, 1.1rem + 1.4vw, 2.1rem);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+  header p.sub {
+    margin: 0;
+    color: var(--text-dim);
+    font-size: 0.95rem;
+    max-width: 62ch;
+    line-height: 1.5;
+  }
+
+  /* stat strip */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin: 28px 0 40px;
+  }
+  .stat {
+    background: var(--surface);
+    padding: 16px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .stat .v { font-size: 1.5rem; font-weight: 700; font-family: "IBM Plex Mono", monospace; }
+  .stat .v.accent { color: var(--accent); }
+  .stat .v.good { color: var(--good); }
+  .stat .k { font-size: 0.7rem; color: var(--text-dim); line-height: 1.3; }
+  @media (max-width: 700px) {
+    .stats { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  section { margin-bottom: 44px; }
+  section > h2 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin: 0 0 4px;
+  }
+  section > p.desc {
+    margin: 0 0 20px;
+    color: var(--text-dim);
+    font-size: 0.88rem;
+    max-width: 68ch;
+    line-height: 1.55;
+  }
+
+  figure { margin: 0; }
+  .svg-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    overflow-x: auto;
+  }
+  .svg-wrap svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+  figcaption {
+    margin-top: 10px;
+    font-size: 0.78rem;
+    color: var(--text-faint);
+    line-height: 1.5;
+  }
+
+  svg text { fill: currentColor; font-family: "IBM Plex Sans", sans-serif; }
+  svg .mono-text { font-family: "IBM Plex Mono", monospace; }
+  svg .dim { fill: var(--text-dim); }
+  svg .faint { fill: var(--text-faint); }
+  svg .node-line { stroke: var(--border); }
+  svg .arrow-line { stroke: var(--text-faint); }
+
+  .legend-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-top: 14px;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+  }
+  .legend-row .item { display: flex; align-items: center; gap: 6px; }
+  .swatch { width: 14px; height: 3px; border-radius: 2px; flex: none; }
+
+  footer {
+    border-top: 1px solid var(--border);
+    padding-top: 20px;
+    font-size: 0.78rem;
+    color: var(--text-faint);
+    line-height: 1.6;
+  }
+</style>

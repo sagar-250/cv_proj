@@ -1,0 +1,207 @@
+<main>
+<header>
+  <p class="eyebrow">Schependomlaan &middot; BIM progress monitoring</p>
+  <h1>From design IFC to a progress percentage</h1>
+  <p class="sub">Six phases, each writing its output to disk before the next one reads it. The two fixes that mattered most &mdash; a registration-jitter correction and an exclusion rule for elements the drone never really "saw" &mdash; are drawn below, not just named.</p>
+</header>
+
+<div class="stats">
+  <div class="stat"><span class="v">1,355</span><span class="k">in-scope elements<br>(walls / slabs / beams / columns)</span></div>
+  <div class="stat"><span class="v">16</span><span class="k">construction-milestone<br>stages, schedule-informed</span></div>
+  <div class="stat"><span class="v">8,352</span><span class="k">element detections<br>across all 16 stages</span></div>
+  <div class="stat"><span class="v good">0.26%</span><span class="k">false-positive rate<br>(22 of 8,352)</span></div>
+  <div class="stat"><span class="v accent">2.0pp</span><span class="k">progress error at the<br>fully-built stage</span></div>
+</div>
+
+<section>
+  <h2>The pipeline</h2>
+  <p class="desc">Every phase is a standalone script; nothing is passed in memory. Each arrow is a real file on disk.</p>
+  <figure class="svg-wrap">
+    <svg viewBox="0 0 700 940" role="img" aria-label="Six-phase pipeline from the design IFC through parsing, ablation, rendering, BIM-matching, and scoring, each phase writing a named file the next phase reads.">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--text-faint)"></path>
+        </marker>
+      </defs>
+
+      <!-- source -->
+      <g transform="translate(230,4)">
+        <rect width="240" height="34" rx="8" fill="none" stroke="var(--border)"></rect>
+        <text x="120" y="22" text-anchor="middle" font-size="12.5" class="mono-text dim">IFC Schependomlaan.ifc</text>
+      </g>
+      <line x1="350" y1="38" x2="350" y2="58" class="arrow-line" stroke-width="1.5" marker-end="url(#arrow)"></line>
+
+      <!-- node template repeated -->
+      <!-- P0 -->
+      <g transform="translate(70,60)">
+        <rect width="560" height="112" rx="12" fill="var(--surface-2)" stroke="var(--border)"></rect>
+        <text x="20" y="28" font-size="13" font-weight="700" class="mono-text" fill="var(--accent)">P0</text>
+        <text x="52" y="28" font-size="15" font-weight="600">Sanity check</text>
+        <text x="20" y="50" font-size="12" class="dim">Cross-check GlobalIds across every IFC export in the dataset</text>
+        <text x="20" y="72" font-size="12" class="mono-text" fill="var(--accent)">&#8594; results/p0_inventory.md</text>
+        <text x="20" y="94" font-size="11.5" class="faint">0% overlap found (Synchro re-export) &mdash; design IFC + synthetic ablation only</text>
+      </g>
+      <line x1="350" y1="172" x2="350" y2="196" class="arrow-line" stroke-width="1.5" marker-end="url(#arrow)"></line>
+      <text x="360" y="188" font-size="10.5" class="mono-text faint">IFC</text>
+
+      <!-- P1 -->
+      <g transform="translate(70,198)">
+        <rect width="560" height="112" rx="12" fill="var(--surface-2)" stroke="var(--border)"></rect>
+        <text x="20" y="28" font-size="13" font-weight="700" class="mono-text" fill="var(--accent)">P1</text>
+        <text x="52" y="28" font-size="15" font-weight="600">Parse</text>
+        <text x="20" y="50" font-size="12" class="dim">ifcopenshell extracts geometry + metadata per in-scope element</text>
+        <text x="20" y="72" font-size="12" class="mono-text" fill="var(--accent)">&#8594; data/bim/bim_complete.csv</text>
+        <text x="20" y="94" font-size="11.5" class="faint">1,355 rows &mdash; 879 walls, 279 slabs, 174 beams, 23 columns</text>
+      </g>
+      <line x1="350" y1="310" x2="350" y2="334" class="arrow-line" stroke-width="1.5" marker-end="url(#arrow)"></line>
+      <text x="360" y="326" font-size="10.5" class="mono-text faint">bim_complete.csv</text>
+
+      <!-- P2 -->
+      <g transform="translate(70,336)">
+        <rect width="560" height="112" rx="12" fill="var(--surface-2)" stroke="var(--border)"></rect>
+        <text x="20" y="28" font-size="13" font-weight="700" class="mono-text" fill="var(--accent)">P2</text>
+        <text x="52" y="28" font-size="15" font-weight="600">Ablate</text>
+        <text x="20" y="50" font-size="12" class="dim">Order by real schedule logic: storey &#8594; structure &#8594; envelope &#8594; interior</text>
+        <text x="20" y="72" font-size="12" class="mono-text" fill="var(--accent)">&#8594; data/states/*/manifest.json</text>
+        <text x="20" y="94" font-size="11.5" class="faint">16 stages: Foundation &#8594; GF &#8594; 1F &#8594; 2F &#8594; 3F &#8594; Roof, jittered + partial-height</text>
+      </g>
+      <line x1="350" y1="448" x2="350" y2="472" class="arrow-line" stroke-width="1.5" marker-end="url(#arrow)"></line>
+      <text x="360" y="464" font-size="10.5" class="mono-text faint">manifest.json &times;16</text>
+
+      <!-- P3 -->
+      <g transform="translate(70,474)">
+        <rect width="560" height="112" rx="12" fill="var(--surface-2)" stroke="var(--border)"></rect>
+        <text x="20" y="28" font-size="13" font-weight="700" class="mono-text" fill="var(--accent)">P3</text>
+        <text x="52" y="28" font-size="15" font-weight="600">Render</text>
+        <text x="20" y="50" font-size="12" class="dim">Raycast an exterior drone orbit + interior walkthrough, per stage</text>
+        <text x="20" y="72" font-size="12" class="mono-text" fill="var(--accent)">&#8594; data/pointclouds/*.npz</text>
+        <text x="20" y="94" font-size="11.5" class="faint">+1.5cm noise, 15% dropout, ~8cm registration jitter (deliberate)</text>
+      </g>
+      <line x1="350" y1="586" x2="350" y2="610" class="arrow-line" stroke-width="1.5" marker-end="url(#arrow)"></line>
+      <text x="360" y="602" font-size="10.5" class="mono-text faint">pointcloud.npz</text>
+
+      <!-- P4 -->
+      <g transform="translate(70,612)">
+        <rect width="560" height="112" rx="12" fill="var(--surface-2)" stroke="var(--accent)" stroke-width="1.3"></rect>
+        <text x="20" y="28" font-size="13" font-weight="700" class="mono-text" fill="var(--accent)">P4</text>
+        <text x="52" y="28" font-size="15" font-weight="600">Match to BIM</text>
+        <text x="20" y="50" font-size="12" class="dim">ICP undoes the jitter, then margin-gated nearest-neighbour assigns points</text>
+        <text x="20" y="72" font-size="12" class="mono-text" fill="var(--accent)">&#8594; data/matches/*/matches.json</text>
+        <text x="20" y="94" font-size="11.5" class="faint">8,352 detections, 22 false positives (0.26%) &mdash; mechanism below</text>
+      </g>
+      <line x1="350" y1="724" x2="350" y2="748" class="arrow-line" stroke-width="1.5" marker-end="url(#arrow)"></line>
+      <text x="360" y="740" font-size="10.5" class="mono-text faint">matches.json</text>
+
+      <!-- P7 -->
+      <g transform="translate(70,750)">
+        <rect width="560" height="112" rx="12" fill="var(--surface-2)" stroke="var(--accent)" stroke-width="1.3"></rect>
+        <text x="20" y="28" font-size="13" font-weight="700" class="mono-text" fill="var(--accent)">P7</text>
+        <text x="52" y="28" font-size="15" font-weight="600">Score</text>
+        <text x="20" y="50" font-size="12" class="dim">Height-coverage &#8594; per-element status, then an uncertain-exclusion rule</text>
+        <text x="20" y="72" font-size="12" class="mono-text" fill="var(--accent)">&#8594; results/main_table.csv</text>
+        <text x="20" y="94" font-size="11.5" class="faint">Progress error: 2.0pp at 100% built (was 33pp before two fixes)</text>
+      </g>
+    </svg>
+  </figure>
+</section>
+
+<section>
+  <h2>Why matching almost failed: construction joints</h2>
+  <p class="desc">Two elements meet at every wall-to-slab and wall-to-wall joint &mdash; their surfaces sit within millimetres of each other. A bare "nearest sample wins" rule lets sensor noise decide, sometimes crediting a wall that isn't built yet. Same point, same two candidate surfaces, two different rules.</p>
+  <figure class="svg-wrap">
+    <svg viewBox="0 0 760 400" role="img" aria-label="Comparison: without a margin, a point near a construction joint gets assigned to whichever of two nearly-equidistant surfaces is fractionally closer, sometimes the wrong, not-yet-built one; with a margin requiring a clear winner, the same ambiguous point is excluded instead of misassigned.">
+      <!-- panel A -->
+      <g transform="translate(0,0)">
+        <text x="180" y="22" text-anchor="middle" font-size="13" font-weight="600">No margin &mdash; nearest wins</text>
+        <!-- built wall (solid) -->
+        <line x1="150" y1="70" x2="150" y2="260" stroke="var(--wall)" stroke-width="6" stroke-linecap="round"></line>
+        <text x="130" y="65" text-anchor="end" font-size="11" class="dim">built wall</text>
+        <!-- ghost wall (not yet built) -->
+        <line x1="150" y1="260" x2="330" y2="260" stroke="var(--ghost)" stroke-width="5" stroke-dasharray="2 6" stroke-linecap="round"></line>
+        <text x="335" y="264" font-size="11" class="faint">not-yet-built wall</text>
+        <!-- point -->
+        <circle cx="175" cy="238" r="5" fill="var(--text)"></circle>
+        <text x="182" y="228" font-size="11" class="dim">observed point</text>
+        <!-- d1 to wall -->
+        <line x1="175" y1="238" x2="150" y2="238" stroke="var(--wall)" stroke-width="1.5" stroke-dasharray="3 3"></line>
+        <text x="145" y="232" text-anchor="end" font-size="11" class="mono-text dim">d1 = 5.2cm</text>
+        <!-- d2 to ghost, highlighted as winner (bad) -->
+        <line x1="175" y1="238" x2="175" y2="260" stroke="var(--bad)" stroke-width="2.5"></line>
+        <text x="182" y="252" font-size="11" class="mono-text" fill="var(--bad)">d2 = 4.8cm</text>
+        <text x="180" y="300" font-size="12" fill="var(--bad)" font-weight="600">d2 &lt; d1 &#8594; credited to the wrong wall &#10007;</text>
+      </g>
+
+      <!-- panel B -->
+      <g transform="translate(400,0)">
+        <text x="180" y="22" text-anchor="middle" font-size="13" font-weight="600">Margin 4cm &mdash; ambiguous, excluded</text>
+        <line x1="150" y1="70" x2="150" y2="260" stroke="var(--wall)" stroke-width="6" stroke-linecap="round"></line>
+        <text x="130" y="65" text-anchor="end" font-size="11" class="dim">built wall</text>
+        <line x1="150" y1="260" x2="330" y2="260" stroke="var(--ghost)" stroke-width="5" stroke-dasharray="2 6" stroke-linecap="round"></line>
+        <text x="335" y="264" font-size="11" class="faint">not-yet-built wall</text>
+        <circle cx="175" cy="238" r="5" fill="none" stroke="var(--text-faint)" stroke-width="1.5"></circle>
+        <line x1="169" y1="232" x2="181" y2="244" stroke="var(--text-faint)" stroke-width="1.5"></line>
+        <line x1="181" y1="232" x2="169" y2="244" stroke="var(--text-faint)" stroke-width="1.5"></line>
+        <line x1="175" y1="238" x2="150" y2="238" stroke="var(--text-faint)" stroke-width="1.5" stroke-dasharray="3 3"></line>
+        <text x="145" y="232" text-anchor="end" font-size="11" class="mono-text faint">d1 = 5.2cm</text>
+        <line x1="175" y1="238" x2="175" y2="260" stroke="var(--text-faint)" stroke-width="1.5" stroke-dasharray="3 3"></line>
+        <text x="182" y="252" font-size="11" class="mono-text faint">d2 = 4.8cm</text>
+        <text x="180" y="300" font-size="12" fill="var(--good)" font-weight="600">&#916; 0.4cm &lt; margin &#8594; excluded, no false credit &#10003;</text>
+      </g>
+    </svg>
+  </figure>
+  <div class="legend-row">
+    <span class="item"><span class="swatch" style="background:var(--wall)"></span>surface with points assigned</span>
+    <span class="item"><span class="swatch" style="background:none;border-top:2px dashed var(--ghost);height:0"></span>surface not yet built</span>
+    <span class="item"><span class="swatch" style="background:var(--bad)"></span>wrong assignment</span>
+    <span class="item"><span class="swatch" style="background:var(--good)"></span>correctly excluded</span>
+  </div>
+</section>
+
+<section>
+  <h2>Does the estimate track reality?</h2>
+  <p class="desc">Count-weighted progress, estimated from the point cloud alone versus the manifest's ground truth, across all 16 stages. Error peaks mid-construction and closes to 2.0 percentage points once every element is actually built &mdash; the pattern SPEC.md's phase 8 flagged as the signature of a pipeline that's actually working, not one masking failures behind the uncertain-exclusion.</p>
+  <figure class="svg-wrap">
+    <svg viewBox="0 0 700 320" role="img" aria-label="Line chart: estimated progress percentage closely tracks ground-truth progress across 16 construction stages, starting near zero together and converging to a 2 percentage point gap at full completion, with the largest gaps in the middle stages.">
+      <!-- gridlines -->
+      <g class="faint">
+        <line x1="50" y1="20" x2="650" y2="20" stroke="var(--border)"></line>
+        <line x1="50" y1="85" x2="650" y2="85" stroke="var(--border)"></line>
+        <line x1="50" y1="150" x2="650" y2="150" stroke="var(--border)"></line>
+        <line x1="50" y1="215" x2="650" y2="215" stroke="var(--border)"></line>
+        <line x1="50" y1="280" x2="650" y2="280" stroke="var(--border)"></line>
+        <text x="40" y="24" text-anchor="end" font-size="11" class="mono-text dim">100</text>
+        <text x="40" y="89" text-anchor="end" font-size="11" class="mono-text dim">75</text>
+        <text x="40" y="154" text-anchor="end" font-size="11" class="mono-text dim">50</text>
+        <text x="40" y="219" text-anchor="end" font-size="11" class="mono-text dim">25</text>
+        <text x="40" y="284" text-anchor="end" font-size="11" class="mono-text dim">0</text>
+      </g>
+      <line x1="50" y1="280" x2="650" y2="280" stroke="var(--text-faint)"></line>
+
+      <!-- ground truth line -->
+      <polyline points="50,259.4 90,252.4 130,248.3 170,210.5 210,194.5 250,174.6 290,140.6 330,124.0 370,105.9 410,84.6 450,71.4 490,48.8 530,44.1 570,30.8 610,25.6 650,20.0"
+                fill="none" stroke="var(--wall)" stroke-width="2"></polyline>
+      <!-- estimated line -->
+      <polyline points="50,259.5 90,256.0 130,248.7 170,226.5 210,212.6 250,185.1 290,158.9 330,143.2 370,119.5 410,103.5 450,90.9 490,58.7 530,53.3 570,50.2 610,39.5 650,25.1"
+                fill="none" stroke="var(--accent)" stroke-width="2.5"></polyline>
+
+      <circle cx="650" cy="20.0" r="4" fill="var(--wall)"></circle>
+      <circle cx="650" cy="25.1" r="4" fill="var(--accent)"></circle>
+      <text x="600" y="12" text-anchor="end" font-size="12" font-weight="600" fill="var(--wall)">100% actual</text>
+      <text x="600" y="42" text-anchor="end" font-size="12" font-weight="600" fill="var(--accent)">98.0% estimated</text>
+      <line x1="662" y1="20" x2="662" y2="25.1" stroke="var(--text-faint)" stroke-width="1"></line>
+      <text x="668" y="26" font-size="10.5" class="mono-text faint">2.0pp</text>
+
+      <text x="50" y="304" font-size="10.5" class="mono-text faint">Foundation</text>
+      <text x="650" y="304" text-anchor="end" font-size="10.5" class="mono-text faint">Roof (complete)</text>
+    </svg>
+  </figure>
+  <div class="legend-row">
+    <span class="item"><span class="swatch" style="background:var(--wall)"></span>ground truth (manifest)</span>
+    <span class="item"><span class="swatch" style="background:var(--accent)"></span>estimated (point cloud)</span>
+  </div>
+</section>
+
+<footer>
+  Simulated data: no real per-element, per-date ground truth exists for this dataset (confirmed in P0 &mdash; the as-planned IFC re-exports and the comparison spreadsheet both fail to share GlobalIds with the design IFC). Stages are a schedule-informed simulated ablation, not reconstructed history. Uncertain-exclusion approximates SPEC.md's visibility criterion using the fully-built stage's own detections as a coverage proxy, since re-raycasting hypothetical not-yet-built geometry was out of scope for this pass.
+</footer>
+</main>

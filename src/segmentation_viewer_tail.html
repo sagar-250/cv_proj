@@ -1,0 +1,358 @@
+<div id="loading">loading segmentation data&hellip;</div>
+
+<div id="canvas-wrap"></div>
+
+<div id="topbar">
+  <div id="title-block">
+    <h1>Segmentation after registration</h1>
+    <p id="subtitle">Every scan point colored by the BIM element class it was matched to after ICP registration + margin-gated nearest-neighbor assignment &mdash; the same segmentation that feeds the progress score, not a separate demo.</p>
+  </div>
+  <div id="weektabs" role="tablist" aria-label="Select stage"></div>
+</div>
+
+<div id="caveat">
+  <strong>What "unmatched" means here.</strong> Grey points either never passed the 8cm distance / 4cm margin assignment gate (construction-joint ambiguity, ground, trees, noise) or landed on an element with fewer than 8 assigned points (too sparse to count as detected). Colored points are exactly what p7_score.py counts as confirmed-built, by class.
+</div>
+
+<div id="legend">
+  <div class="legend-title" id="legend-title">Assigned class</div>
+  <div class="legend-row"><span class="legend-swatch" style="background:rgb(76,120,168)"></span><span>Wall</span><span class="v mono" id="cnt-wall">&mdash;</span></div>
+  <div class="legend-row"><span class="legend-swatch" style="background:rgb(245,133,24)"></span><span>Slab</span><span class="v mono" id="cnt-slab">&mdash;</span></div>
+  <div class="legend-row"><span class="legend-swatch" style="background:rgb(84,162,75)"></span><span>Beam</span><span class="v mono" id="cnt-beam">&mdash;</span></div>
+  <div class="legend-row"><span class="legend-swatch" style="background:rgb(228,87,86)"></span><span>Column</span><span class="v mono" id="cnt-column">&mdash;</span></div>
+  <div class="legend-row"><span class="legend-swatch" style="background:rgb(107,114,128)"></span><span>Unmatched</span><span class="v mono" id="cnt-unmatched">&mdash;</span></div>
+</div>
+
+<div id="panel">
+  <p class="week-label mono" id="panel-week">&mdash;</p>
+  <div class="stat-row"><span class="k">points in scan</span><span class="v mono" id="panel-total">&mdash;</span></div>
+  <div class="stat-row"><span class="k">points shown</span><span class="v mono" id="panel-shown">&mdash;</span></div>
+  <div class="stat-row"><span class="k">confirmed-classified</span><span class="v mono" id="panel-classified">&mdash;</span></div>
+</div>
+
+<div id="controls-hint">
+  <div><b>drag</b> orbit &middot; <b>scroll</b> zoom &middot; <b>right-drag</b> pan</div>
+</div>
+
+<div id="sliders">
+  <div class="slider-row">
+    <label for="size-slider">point size</label>
+    <input type="range" id="size-slider" min="0.2" max="4" step="0.05" value="2">
+    <span class="slider-val mono" id="size-val">2.00&times;</span>
+  </div>
+  <div class="slider-row">
+    <label for="density-slider">density</label>
+    <input type="range" id="density-slider" min="5" max="100" step="1" value="100">
+    <span class="slider-val mono" id="density-val">100%</span>
+  </div>
+  <div class="toggle-row">
+    <label for="wireframe-toggle">ghost wireframe</label>
+    <input type="checkbox" id="wireframe-toggle" checked>
+  </div>
+  <div class="toggle-row">
+    <label for="instance-toggle">by element</label>
+    <input type="checkbox" id="instance-toggle">
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.140.2/three.min.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  var colorMode = "uniform";
+  var wireframeVisible = true;
+
+  var ALL = window.SEGVIEW_DATA.weeks;
+  var stages = ALL.filter(function (w) { return w.type === "segview"; })
+    .sort(function (a, b) { return a.label < b.label ? -1 : 1; });
+  var bimMeshWeek = ALL.filter(function (w) { return w.type === "mesh"; })[0];
+
+  function b64ToFloat32(b64) {
+    var bin = atob(b64);
+    var buf = new ArrayBuffer(bin.length);
+    var view = new Uint8Array(buf);
+    for (var i = 0; i < bin.length; i++) view[i] = bin.charCodeAt(i);
+    return new Float32Array(buf);
+  }
+  function b64ToUint8(b64) {
+    var bin = atob(b64);
+    var arr = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return arr;
+  }
+  function b64ToUint32(b64) {
+    var bin = atob(b64);
+    var buf = new ArrayBuffer(bin.length);
+    var view = new Uint8Array(buf);
+    for (var i = 0; i < bin.length; i++) view[i] = bin.charCodeAt(i);
+    return new Uint32Array(buf);
+  }
+  function b64ToInt16(b64) {
+    var bin = atob(b64);
+    var buf = new ArrayBuffer(bin.length);
+    var view = new Uint8Array(buf);
+    for (var i = 0; i < bin.length; i++) view[i] = bin.charCodeAt(i);
+    return new Int16Array(buf);
+  }
+
+  // ---------- three.js scene ----------
+  var wrap = document.getElementById("canvas-wrap");
+  var scene = new THREE.Scene();
+  var camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 1e7);
+  var renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  wrap.appendChild(renderer.domElement);
+
+  function bgColor() {
+    var v = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+    return new THREE.Color(v || "#12141a");
+  }
+  scene.background = bgColor();
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+  var keyLight = new THREE.DirectionalLight(0xffffff, 0.7);
+  keyLight.position.set(1, 1.6, 0.8);
+  scene.add(keyLight);
+
+  var currentObjects = [];
+  function clearCurrent() {
+    currentObjects.forEach(function (obj) { scene.remove(obj); });
+    currentObjects = [];
+  }
+  var target = new THREE.Vector3(0, 0, 0);
+
+  // ---------- minimal orbit camera ----------
+  var spherical = { radius: 30, theta: Math.PI * 0.28, phi: Math.PI * 0.38 };
+  var dragging = false, panning = false, lastX = 0, lastY = 0;
+
+  function applyCamera() {
+    var sinPhi = Math.sin(spherical.phi);
+    camera.position.set(
+      target.x + spherical.radius * sinPhi * Math.sin(spherical.theta),
+      target.y + spherical.radius * Math.cos(spherical.phi),
+      target.z + spherical.radius * sinPhi * Math.cos(spherical.theta)
+    );
+    camera.lookAt(target);
+  }
+
+  renderer.domElement.addEventListener("pointerdown", function (e) {
+    dragging = true;
+    panning = e.button === 2;
+    lastX = e.clientX; lastY = e.clientY;
+    renderer.domElement.setPointerCapture(e.pointerId);
+  });
+  renderer.domElement.addEventListener("pointerup", function () { dragging = false; });
+  renderer.domElement.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+  renderer.domElement.addEventListener("pointermove", function (e) {
+    if (!dragging) return;
+    var dx = e.clientX - lastX, dy = e.clientY - lastY;
+    lastX = e.clientX; lastY = e.clientY;
+    if (panning) {
+      var panScale = spherical.radius * 0.0016;
+      var right = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+      camera.getWorldDirection(right);
+      right.cross(up).normalize();
+      var realUp = new THREE.Vector3().crossVectors(right, new THREE.Vector3().subVectors(camera.position, target).normalize());
+      target.addScaledVector(right, -dx * panScale);
+      target.addScaledVector(realUp, dy * panScale);
+    } else {
+      spherical.theta -= dx * 0.006;
+      spherical.phi -= dy * 0.006;
+      spherical.phi = Math.max(0.05, Math.min(Math.PI - 0.05, spherical.phi));
+    }
+    applyCamera();
+  });
+  renderer.domElement.addEventListener("wheel", function (e) {
+    e.preventDefault();
+    var factor = Math.exp(e.deltaY * 0.0012);
+    spherical.radius = Math.max(0.02, Math.min(1e6, spherical.radius * factor));
+    applyCamera();
+  }, { passive: false });
+
+  window.addEventListener("resize", function () {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  function animate() {
+    requestAnimationFrame(animate);
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  // ---------- ghost wireframe house (context for where classes should sit) ----------
+  var wireframeCache = null;
+  function getWireframeHouse() {
+    if (wireframeCache || !bimMeshWeek) return wireframeCache || [];
+    wireframeCache = [];
+    bimMeshWeek.parts.forEach(function (part) {
+      var pos = b64ToFloat32(part.pos);
+      var idx = b64ToUint32(part.idx);
+      var geom = new THREE.BufferGeometry();
+      geom.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+      geom.setIndex(new THREE.BufferAttribute(idx, 1));
+
+      var fillMat = new THREE.MeshBasicMaterial({
+        color: 0x5ec8f2, transparent: true, opacity: 0.018,
+        side: THREE.DoubleSide, depthWrite: false,
+      });
+      wireframeCache.push(new THREE.Mesh(geom, fillMat));
+
+      var edges = new THREE.EdgesGeometry(geom, 25);
+      var lineMat = new THREE.LineBasicMaterial({
+        color: 0x9fe8ff, transparent: true, opacity: 0.4,
+        depthWrite: false,
+      });
+      wireframeCache.push(new THREE.LineSegments(edges, lineMat));
+    });
+    return wireframeCache;
+  }
+
+  // ---------- colored-by-class point cloud ----------
+  var objCache = {};
+  function buildPoints(week) {
+    var pos;
+    if (week.posQuant === "i16") {
+      var posI16 = b64ToInt16(week.pos);
+      pos = new Float32Array(posI16.length);
+      for (var p = 0; p < posI16.length; p++) pos[p] = posI16[p] * week.posScale;
+    } else {
+      pos = b64ToFloat32(week.pos);
+    }
+    var colClassU8 = b64ToUint8(week.col);
+    var colInstanceU8 = week.colInstance ? b64ToUint8(week.colInstance) : colClassU8;
+    var col = new Float32Array(colClassU8.length);
+    var src = colorMode === "instance" ? colInstanceU8 : colClassU8;
+    for (var i = 0; i < src.length; i++) col[i] = src[i] / 255;
+
+    var geom = new THREE.BufferGeometry();
+    geom.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    geom.setAttribute("color", new THREE.BufferAttribute(col, 3));
+
+    var core = (bimMeshWeek && bimMeshWeek.coreRadius) || week.coreRadius || week.radius || 10;
+    var baseSize = Math.max(core * 0.0032, 0.012);
+    var mat = new THREE.PointsMaterial({
+      size: baseSize,
+      vertexColors: true,
+      sizeAttenuation: true,
+    });
+    var pts = new THREE.Points(geom, mat);
+    pts.userData.baseSize = baseSize;
+    pts.userData.nPoints = week.nPoints;
+    pts.userData.colClass = colClassU8;
+    pts.userData.colInstance = colInstanceU8;
+    return [pts];
+  }
+
+  function applyColorMode(mode) {
+    currentObjects.forEach(function (obj) {
+      if (!(obj instanceof THREE.Points) || !obj.userData.colClass) return;
+      var src = mode === "instance" ? obj.userData.colInstance : obj.userData.colClass;
+      var col = obj.geometry.attributes.color.array;
+      for (var i = 0; i < src.length; i++) col[i] = src[i] / 255;
+      obj.geometry.attributes.color.needsUpdate = true;
+    });
+    document.getElementById("legend").classList.toggle("instance-mode", mode === "instance");
+    document.getElementById("legend-title").textContent =
+      mode === "instance" ? "Per-element (arbitrary hue)" : "Assigned class";
+  }
+
+  function loadWeek(week) {
+    clearCurrent();
+    var key = week.label;
+    var objs = objCache[key];
+    if (!objs) {
+      objs = buildPoints(week);
+      objCache[key] = objs;
+    }
+
+    var sceneObjs = getWireframeHouse().concat(objs);
+    sceneObjs.forEach(function (obj) { scene.add(obj); });
+    currentObjects = sceneObjs;
+    applyPointSettings();
+
+    var core = (bimMeshWeek && bimMeshWeek.coreRadius) || week.coreRadius || week.radius || 10;
+    target.set(0, 0, 0);
+    spherical.radius = Math.max(core * 1.6, 0.05);
+    applyCamera();
+
+    document.getElementById("panel-week").textContent = week.label.replace("SEGVIEW: ", "");
+    document.getElementById("panel-total").textContent = week.nPointsFull.toLocaleString();
+    document.getElementById("panel-shown").textContent = week.nPoints.toLocaleString();
+    var classified = Object.keys(week.classCounts).reduce(function (s, k) { return s + week.classCounts[k]; }, 0);
+    document.getElementById("panel-classified").textContent =
+      classified.toLocaleString() + " (" + (100 * classified / week.nPointsFull).toFixed(1) + "%)";
+
+    document.getElementById("cnt-wall").textContent = week.classCounts.Wall.toLocaleString();
+    document.getElementById("cnt-slab").textContent = week.classCounts.Slab.toLocaleString();
+    document.getElementById("cnt-beam").textContent = week.classCounts.Beam.toLocaleString();
+    document.getElementById("cnt-column").textContent = week.classCounts.Column.toLocaleString();
+    document.getElementById("cnt-unmatched").textContent = week.nUnmatched.toLocaleString();
+
+    var tabs = document.querySelectorAll(".weektab");
+    for (var t = 0; t < tabs.length; t++) {
+      tabs[t].classList.toggle("active", tabs[t].dataset.label === key);
+    }
+  }
+
+  function shortLabel(label) {
+    var m = label.match(/^SEGVIEW:\s*(\d+)\s+.*-\s*(\w+)/);
+    return m ? m[1] + " · " + m[2].slice(0, 3) : label.replace("SEGVIEW: ", "");
+  }
+
+  var tabbar = document.getElementById("weektabs");
+  stages.forEach(function (w) {
+    var btn = document.createElement("button");
+    btn.className = "weektab mono";
+    btn.textContent = shortLabel(w.label);
+    btn.dataset.label = w.label;
+    btn.addEventListener("click", function () { loadWeek(w); });
+    tabbar.appendChild(btn);
+  });
+
+  // ---------- size / density sliders ----------
+  var sizeMult = 2.0;
+  var densityFrac = 1.0;
+
+  function applyPointSettings() {
+    currentObjects.forEach(function (obj) {
+      if (!(obj instanceof THREE.Points)) return;
+      obj.material.size = (obj.userData.baseSize || 0.02) * sizeMult;
+      var n = obj.userData.nPoints || 0;
+      obj.geometry.setDrawRange(0, Math.max(1, Math.round(n * densityFrac)));
+    });
+  }
+
+  var sizeSlider = document.getElementById("size-slider");
+  var sizeVal = document.getElementById("size-val");
+  sizeSlider.addEventListener("input", function () {
+    sizeMult = parseFloat(sizeSlider.value);
+    sizeVal.textContent = sizeMult.toFixed(2) + "×";
+    applyPointSettings();
+  });
+
+  var densitySlider = document.getElementById("density-slider");
+  var densityVal = document.getElementById("density-val");
+  densitySlider.addEventListener("input", function () {
+    densityFrac = parseFloat(densitySlider.value) / 100;
+    densityVal.textContent = Math.round(densityFrac * 100) + "%";
+    applyPointSettings();
+  });
+
+  document.getElementById("wireframe-toggle").addEventListener("change", function (e) {
+    wireframeVisible = e.target.checked;
+    getWireframeHouse().forEach(function (obj) { obj.visible = wireframeVisible; });
+  });
+
+  document.getElementById("instance-toggle").addEventListener("change", function (e) {
+    colorMode = e.target.checked ? "instance" : "uniform";
+    applyColorMode(colorMode);
+  });
+
+  loadWeek(stages[0]);
+  document.getElementById("loading").style.display = "none";
+})();
+</script>

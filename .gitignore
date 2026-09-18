@@ -1,0 +1,20 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Raw dataset (5.5GB, clone separately per docs/SPEC.md section 4.1)
+data/raw/
+data/renders/
+
+# Regenerable caches / intermediate artifacts (recompute via src/p4_match_bim.py,
+# src/p4_segment.py, src/p3_render.py -- see each script's docstring)
+data/bim/bim_surface_samples.npz
+data/matches_cache/
+data/matches/
+data/observations/
+data/pointclouds/
+
+# OS
+Thumbs.db
+.DS_Store

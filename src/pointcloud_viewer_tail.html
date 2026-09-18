@@ -1,0 +1,543 @@
+<div id="loading">loading point cloud data&hellip;</div>
+
+<div id="canvas-wrap"></div>
+
+<div id="topbar">
+  <div id="title-block">
+    <h1>Simulated construction progress</h1>
+    <p id="subtitle">Digital-twin progress overlay: the complete design as a ghost outline, confirmed-built points glowing inside it, live estimated % complete.</p>
+  </div>
+  <div id="tabgroup-wrap">
+    <div id="groupswitch" role="tablist" aria-label="Select dataset"></div>
+    <div id="weektabs" role="tablist" aria-label="Select scene"></div>
+  </div>
+</div>
+
+
+<div id="progress-badge" hidden>
+  <div id="progress-pct" class="mono">&mdash;</div>
+  <div id="progress-label">complete</div>
+  <div id="progress-gt" class="mono"></div>
+</div>
+
+<div id="panel">
+  <p class="week-label mono" id="panel-week">&mdash;</p>
+  <div class="stat-row"><span class="k" id="panel-shown-label">points shown</span><span class="v mono" id="panel-shown">&mdash;</span></div>
+  <div class="stat-row" id="panel-total-row"><span class="k">points in scan</span><span class="v mono" id="panel-total">&mdash;</span></div>
+  <div class="stat-row"><span class="k" id="panel-dropped-label">outliers dropped</span><span class="v mono" id="panel-dropped">&mdash;</span></div>
+  <div id="panel-legend" hidden></div>
+</div>
+
+<div id="controls-hint">
+  <div><b>drag</b> orbit &middot; <b>scroll</b> zoom &middot; <b>right-drag</b> pan</div>
+</div>
+
+<div id="sliders">
+  <div class="slider-row">
+    <label for="size-slider">point size</label>
+    <input type="range" id="size-slider" min="0.2" max="4" step="0.05" value="2">
+    <span class="slider-val mono" id="size-val">2.00&times;</span>
+  </div>
+  <div class="slider-row">
+    <label for="density-slider">density</label>
+    <input type="range" id="density-slider" min="5" max="100" step="1" value="100">
+    <span class="slider-val mono" id="density-val">100%</span>
+  </div>
+  <div class="toggle-row">
+    <label for="wireframe-toggle">ghost wireframe</label>
+    <input type="checkbox" id="wireframe-toggle" checked>
+  </div>
+  <div class="toggle-row">
+    <label for="instance-toggle">by element</label>
+    <input type="checkbox" id="instance-toggle">
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.140.2/three.min.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  var ALL = window.POINTCLOUD_DATA.weeks;
+  function groupOf(w) {
+    if (w.label.indexOf("OVERLAY:") === 0) return "progress";
+    if (w.label.indexOf("SEG:") === 0) return "seg";
+    if (w.label.indexOf("BIM") === 0) return "bim";
+    if (w.label.indexOf("ConSLAM") === 0) return "conslam";
+    return "schependomlaan";
+  }
+  var GROUPS = [
+    { key: "progress", label: "Progress", items: ALL.filter(function (w) { return groupOf(w) === "progress"; }) },
+    { key: "seg", label: "Segmentation", items: ALL.filter(function (w) { return groupOf(w) === "seg"; }) },
+    { key: "bim", label: "BIM", items: ALL.filter(function (w) { return groupOf(w) === "bim"; }) },
+    { key: "conslam", label: "ConSLAM", items: ALL.filter(function (w) { return groupOf(w) === "conslam"; }) },
+    { key: "schependomlaan", label: "Schependomlaan", items: ALL.filter(function (w) { return groupOf(w) === "schependomlaan"; }) }
+  ].filter(function (g) { return g.items.length > 0; });
+  var activeGroup = GROUPS[0];
+
+  function b64ToFloat32(b64) {
+    var bin = atob(b64);
+    var buf = new ArrayBuffer(bin.length);
+    var view = new Uint8Array(buf);
+    for (var i = 0; i < bin.length; i++) view[i] = bin.charCodeAt(i);
+    return new Float32Array(buf);
+  }
+  function b64ToUint8(b64) {
+    var bin = atob(b64);
+    var arr = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return arr;
+  }
+
+  // ---------- three.js scene ----------
+  var wrap = document.getElementById("canvas-wrap");
+  var scene = new THREE.Scene();
+  var camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 1e7);
+  var renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  wrap.appendChild(renderer.domElement);
+
+  function bgColor() {
+    var v = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+    return new THREE.Color(v || "#12141a");
+  }
+  scene.background = bgColor();
+
+  var ambientLight = new THREE.AmbientLight(0xffffff, 0.55);
+  scene.add(ambientLight);
+  var keyLight = new THREE.DirectionalLight(0xffffff, 0.9);
+  keyLight.position.set(1, 1.6, 0.8);
+  scene.add(keyLight);
+  var fillLight = new THREE.DirectionalLight(0xffffff, 0.35);
+  fillLight.position.set(-1, 0.4, -0.6);
+  scene.add(fillLight);
+
+  var currentObjects = [];
+  function clearCurrent() {
+    // everything reachable here is retained in objCache/wireframeCache for
+    // reuse (switching tabs back and forth is the whole point of this UI),
+    // so only detach from the scene -- do not dispose shared geometry/material.
+    currentObjects.forEach(function (obj) { scene.remove(obj); });
+    currentObjects = [];
+  }
+  var target = new THREE.Vector3(0, 0, 0);
+
+  // ---------- minimal orbit camera (no external controls dependency) ----------
+  var spherical = { radius: 30, theta: Math.PI * 0.28, phi: Math.PI * 0.38 };
+  var dragging = false, panning = false, lastX = 0, lastY = 0;
+
+  function applyCamera() {
+    var sinPhi = Math.sin(spherical.phi);
+    camera.position.set(
+      target.x + spherical.radius * sinPhi * Math.sin(spherical.theta),
+      target.y + spherical.radius * Math.cos(spherical.phi),
+      target.z + spherical.radius * sinPhi * Math.cos(spherical.theta)
+    );
+    camera.lookAt(target);
+  }
+
+  renderer.domElement.addEventListener("pointerdown", function (e) {
+    dragging = true;
+    panning = e.button === 2;
+    lastX = e.clientX; lastY = e.clientY;
+    renderer.domElement.setPointerCapture(e.pointerId);
+  });
+  renderer.domElement.addEventListener("pointerup", function () { dragging = false; });
+  renderer.domElement.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+  renderer.domElement.addEventListener("pointermove", function (e) {
+    if (!dragging) return;
+    var dx = e.clientX - lastX, dy = e.clientY - lastY;
+    lastX = e.clientX; lastY = e.clientY;
+    if (panning) {
+      var panScale = spherical.radius * 0.0016;
+      var right = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+      camera.getWorldDirection(right);
+      right.cross(up).normalize();
+      var realUp = new THREE.Vector3().crossVectors(right, new THREE.Vector3().subVectors(camera.position, target).normalize());
+      target.addScaledVector(right, -dx * panScale);
+      target.addScaledVector(realUp, dy * panScale);
+    } else {
+      spherical.theta -= dx * 0.006;
+      spherical.phi -= dy * 0.006;
+      spherical.phi = Math.max(0.05, Math.min(Math.PI - 0.05, spherical.phi));
+    }
+    applyCamera();
+  });
+  renderer.domElement.addEventListener("wheel", function (e) {
+    e.preventDefault();
+    var factor = Math.exp(e.deltaY * 0.0012);
+    spherical.radius = Math.max(0.02, Math.min(1e6, spherical.radius * factor));
+    applyCamera();
+  }, { passive: false });
+
+  window.addEventListener("resize", function () {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  function animate() {
+    requestAnimationFrame(animate);
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  // ---------- week loading ----------
+  var objCache = {};
+
+  function b64ToUint32(b64) {
+    var bin = atob(b64);
+    var buf = new ArrayBuffer(bin.length);
+    var view = new Uint8Array(buf);
+    for (var i = 0; i < bin.length; i++) view[i] = bin.charCodeAt(i);
+    return new Uint32Array(buf);
+  }
+
+  function b64ToInt16(b64) {
+    var bin = atob(b64);
+    var buf = new ArrayBuffer(bin.length);
+    var view = new Uint8Array(buf);
+    for (var i = 0; i < bin.length; i++) view[i] = bin.charCodeAt(i);
+    return new Int16Array(buf);
+  }
+
+  function buildPoints(week) {
+    var pos;
+    if (week.posQuant === "i16") {
+      var posI16 = b64ToInt16(week.pos);
+      pos = new Float32Array(posI16.length);
+      for (var p = 0; p < posI16.length; p++) pos[p] = posI16[p] * week.posScale;
+    } else {
+      pos = b64ToFloat32(week.pos);
+    }
+    var colU8 = b64ToUint8(week.col);
+    var col = new Float32Array(colU8.length);
+    for (var i = 0; i < colU8.length; i++) col[i] = colU8[i] / 255;
+
+    var geom = new THREE.BufferGeometry();
+    geom.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    geom.setAttribute("color", new THREE.BufferAttribute(col, 3));
+
+    var core = week.coreRadius || week.radius || 10;
+    var baseSize = Math.max(core * 0.0028, 0.01);
+    var mat = new THREE.PointsMaterial({
+      size: baseSize,
+      vertexColors: true,
+      sizeAttenuation: true,
+    });
+    var pts = new THREE.Points(geom, mat);
+    pts.userData.baseSize = baseSize;
+    pts.userData.nPoints = week.nPoints;
+    return [pts];
+  }
+
+  function buildMesh(week) {
+    return week.parts.map(function (part) {
+      var pos = b64ToFloat32(part.pos);
+      var idx = b64ToUint32(part.idx);
+      var geom = new THREE.BufferGeometry();
+      geom.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+      geom.setIndex(new THREE.BufferAttribute(idx, 1));
+      geom.computeVertexNormals();
+      var c = part.color;
+      var mat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(c[0] / 255, c[1] / 255, c[2] / 255),
+        roughness: 0.85,
+        metalness: 0.02,
+        side: THREE.DoubleSide,
+      });
+      return new THREE.Mesh(geom, mat);
+    });
+  }
+
+  // ---------- solidified voxel cloud: render each confirmed-built point as a
+  // small cube instead of a gl.POINT, so overlapping cubes fuse into
+  // surface-like slabs/walls rather than reading as a sparse dot cloud.
+  // Positions are cached in userData so the size/density sliders can rebuild
+  // instance matrices on the fly without re-decoding base64 payloads.
+  var voxelDummy = new THREE.Object3D();
+  var voxelGeom = new THREE.BoxGeometry(1, 1, 1);
+
+  function updateVoxelMatrices(mesh, sizeMult, densityFrac) {
+    var pos = mesh.userData.positions;
+    var n = mesh.userData.nPoints;
+    var edge = mesh.userData.baseEdge * sizeMult;
+    var visibleCount = Math.max(1, Math.min(n, Math.round(n * densityFrac)));
+    voxelDummy.scale.setScalar(edge);
+    for (var i = 0; i < visibleCount; i++) {
+      voxelDummy.position.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]);
+      voxelDummy.updateMatrix();
+      mesh.setMatrixAt(i, voxelDummy.matrix);
+    }
+    mesh.count = visibleCount;
+    mesh.instanceMatrix.needsUpdate = true;
+  }
+
+  // "uniform" mode shows the solidified voxel cloud (solid accent color,
+  // no per-vertex coloring involved at all). "by element" mode swaps in a
+  // separate colored THREE.Points cloud instead of trying to color the
+  // InstancedMesh per-instance -- InstancedMesh.instanceColor rendered
+  // solid black on the three.js build this page loads, so this sidesteps
+  // that entirely by reusing the plain vertex-colored Points path (the same
+  // one the segmentation viewer uses successfully).
+  function buildOverlayRepresentations(week) {
+    var pos;
+    if (week.posQuant === "i16") {
+      var posI16 = b64ToInt16(week.pos);
+      pos = new Float32Array(posI16.length);
+      for (var p = 0; p < posI16.length; p++) pos[p] = posI16[p] * week.posScale;
+    } else {
+      pos = b64ToFloat32(week.pos);
+    }
+    var colUniform = b64ToUint8(week.col);
+    var colInstance = week.colInstance ? b64ToUint8(week.colInstance) : colUniform;
+    var n = pos.length / 3;
+    var core = week.coreRadius || week.radius || 10;
+
+    var uniformColor = new THREE.Color(colUniform[0] / 255, colUniform[1] / 255, colUniform[2] / 255);
+    var voxelMat = new THREE.MeshStandardMaterial({ color: uniformColor, roughness: 0.5, metalness: 0.05 });
+    var voxelMesh = new THREE.InstancedMesh(voxelGeom, voxelMat, n);
+    voxelMesh.userData.positions = pos;
+    voxelMesh.userData.baseEdge = Math.max(core * 0.0045, 0.008);
+    voxelMesh.userData.nPoints = n;
+    updateVoxelMatrices(voxelMesh, sizeMult, densityFrac);
+
+    var geom = new THREE.BufferGeometry();
+    geom.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    var colF = new Float32Array(colInstance.length);
+    for (var i = 0; i < colInstance.length; i++) colF[i] = colInstance[i] / 255;
+    geom.setAttribute("color", new THREE.BufferAttribute(colF, 3));
+    var pointBaseSize = Math.max(core * 0.005, 0.014);
+    var pointMat = new THREE.PointsMaterial({ size: pointBaseSize, vertexColors: true, sizeAttenuation: true });
+    var instPoints = new THREE.Points(geom, pointMat);
+    instPoints.userData.baseSize = pointBaseSize;
+    instPoints.userData.nPoints = n;
+
+    return { voxel: voxelMesh, instancePoints: instPoints };
+  }
+
+  // ---------- digital-twin overlay: blue transparent wireframe + confirmed-built points ----------
+  var bimMeshWeek = ALL.filter(function (w) { return w.type === "mesh"; })[0];
+  var wireframeCache = null;
+  function getWireframeHouse() {
+    if (wireframeCache || !bimMeshWeek) return wireframeCache || [];
+    wireframeCache = [];
+    bimMeshWeek.parts.forEach(function (part) {
+      var pos = b64ToFloat32(part.pos);
+      var idx = b64ToUint32(part.idx);
+      var geom = new THREE.BufferGeometry();
+      geom.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+      geom.setIndex(new THREE.BufferAttribute(idx, 1));
+
+      var fillMat = new THREE.MeshBasicMaterial({
+        color: 0x5ec8f2, transparent: true, opacity: 0.018,
+        side: THREE.DoubleSide, depthWrite: false,
+      });
+      wireframeCache.push(new THREE.Mesh(geom, fillMat));
+
+      var edges = new THREE.EdgesGeometry(geom, 25);
+      var lineMat = new THREE.LineBasicMaterial({
+        color: 0x9fe8ff, transparent: true, opacity: 0.95,
+        linewidth: 2, depthWrite: false, blending: THREE.AdditiveBlending,
+      });
+      wireframeCache.push(new THREE.LineSegments(edges, lineMat));
+    });
+    return wireframeCache;
+  }
+
+  var currentWeek = null;
+
+  function loadWeek(week) {
+    clearCurrent();
+    currentWeek = week;
+
+    var key = week.label;
+    var objs;
+    if (week.type === "overlay") {
+      var built = objCache[key];
+      if (!built) {
+        built = buildOverlayRepresentations(week);
+        objCache[key] = built;
+      }
+      objs = [colorMode === "instance" ? built.instancePoints : built.voxel];
+    } else if (objCache[key]) {
+      objs = objCache[key];
+    } else if (week.type === "mesh") {
+      objs = buildMesh(week);
+      objCache[key] = objs;
+    } else {
+      objs = buildPoints(week);
+      objCache[key] = objs;
+    }
+
+    var sceneObjs = week.type === "overlay" ? getWireframeHouse().concat(objs) : objs;
+    sceneObjs.forEach(function (obj) { scene.add(obj); });
+    currentObjects = sceneObjs;
+    applyPointSettings();
+
+    var badge = document.getElementById("progress-badge");
+    if (week.type === "overlay") {
+      badge.hidden = false;
+      document.getElementById("progress-pct").textContent = week.progressPct.toFixed(1) + "%";
+      document.getElementById("progress-gt").textContent = "actual: " + week.progressGtPct.toFixed(1) + "%";
+    } else {
+      badge.hidden = true;
+    }
+
+    // overlay: frame on the FULL house (bimMeshWeek), not this stage's smaller
+    // built-so-far extent, so the ghost house stays fully in view at every stage
+    var frameSource = (week.type === "overlay" && bimMeshWeek) ? bimMeshWeek : week;
+    var core = frameSource.coreRadius || frameSource.radius || 10;
+    target.set(0, 0, 0);
+    spherical.radius = Math.max(core * 1.6, 0.05);
+    applyCamera();
+
+    document.getElementById("panel-week").textContent = week.label;
+    var legend = document.getElementById("panel-legend");
+    if (week.type === "mesh") {
+      document.getElementById("panel-shown-label").textContent = "elements";
+      document.getElementById("panel-shown").textContent = week.nElements.toLocaleString();
+      document.getElementById("panel-total-row").hidden = true;
+      document.getElementById("panel-dropped-label").textContent = "triangles";
+      document.getElementById("panel-dropped").textContent =
+        week.parts.reduce(function (s, p) { return s + p.nTris; }, 0).toLocaleString();
+
+      legend.innerHTML = "";
+      week.parts.forEach(function (p) {
+        var row = document.createElement("div");
+        row.className = "legend-row";
+        var swatch = document.createElement("span");
+        swatch.className = "legend-swatch";
+        swatch.style.background = "rgb(" + p.color.join(",") + ")";
+        var text = document.createElement("span");
+        text.textContent = p.label + " (" + p.nElements + ")";
+        row.appendChild(swatch);
+        row.appendChild(text);
+        legend.appendChild(row);
+      });
+      legend.hidden = false;
+    } else {
+      document.getElementById("panel-shown-label").textContent = "points shown";
+      document.getElementById("panel-shown").textContent = week.nPoints.toLocaleString();
+      document.getElementById("panel-total-row").hidden = false;
+      document.getElementById("panel-total").textContent = week.nPointsFull.toLocaleString();
+      document.getElementById("panel-dropped-label").textContent = "outliers dropped";
+      document.getElementById("panel-dropped").textContent = week.nOutliersDropped.toLocaleString();
+      legend.hidden = true;
+    }
+
+    var tabs = document.querySelectorAll(".weektab");
+    for (var t = 0; t < tabs.length; t++) {
+      tabs[t].classList.toggle("active", tabs[t].dataset.label === key);
+    }
+  }
+
+  // ---------- tabs ----------
+  var tabbar = document.getElementById("weektabs");
+  var groupbar = document.getElementById("groupswitch");
+
+  function shortLabel(label) {
+    if (label.indexOf("OVERLAY: ") === 0) {
+      var om = label.match(/^OVERLAY:\s*(\d+)\s+.*-\s*(\w+)/);
+      return om ? om[1] + " · " + om[2].slice(0, 3) : label.replace("OVERLAY: ", "");
+    }
+    if (label.indexOf("SEG: ") === 0) return label.replace("SEG: ", "");
+    if (label.indexOf("BIM: Schependomlaan") === 0) return "Design IFC";
+    // "BIM: 03 00 GF - envelope" -> "03 · env"
+    var m = label.match(/^BIM:\s*(\d+)\s+.*-\s*(\w+)/);
+    if (m) return m[1] + " · " + m[2].slice(0, 3);
+    return label.replace("BIM: ", "");
+  }
+
+  function renderWeekTabs() {
+    tabbar.innerHTML = "";
+    activeGroup.items.forEach(function (week, i) {
+      var btn = document.createElement("button");
+      btn.className = "weektab";
+      btn.type = "button";
+      btn.textContent = shortLabel(week.label);
+      btn.dataset.label = week.label;
+      btn.setAttribute("role", "tab");
+      btn.addEventListener("click", function () { loadWeek(week); });
+      tabbar.appendChild(btn);
+    });
+  }
+
+  function renderGroupSwitch() {
+    groupbar.innerHTML = "";
+    if (GROUPS.length <= 1) { groupbar.hidden = true; return; }
+    groupbar.hidden = false;
+    GROUPS.forEach(function (g) {
+      var btn = document.createElement("button");
+      btn.className = "grouptab" + (g.key === activeGroup.key ? " active" : "");
+      btn.type = "button";
+      btn.textContent = g.label + " (" + g.items.length + ")";
+      btn.setAttribute("role", "tab");
+      btn.addEventListener("click", function () {
+        activeGroup = g;
+        renderGroupSwitch();
+        renderWeekTabs();
+        loadWeek(g.items[0]);
+      });
+      groupbar.appendChild(btn);
+    });
+  }
+
+  // ---------- size / density sliders ----------
+  var sizeMult = 2.0;
+  var densityFrac = 1.0;
+  var colorMode = "uniform";
+  var wireframeVisible = true;
+
+  function applyPointSettings() {
+    currentObjects.forEach(function (obj) {
+      if (obj instanceof THREE.Points) {
+        obj.material.size = (obj.userData.baseSize || 0.02) * sizeMult;
+        var n = obj.userData.nPoints || 0;
+        obj.geometry.setDrawRange(0, Math.max(1, Math.round(n * densityFrac)));
+      } else if (obj.isInstancedMesh) {
+        updateVoxelMatrices(obj, sizeMult, densityFrac);
+      }
+    });
+  }
+
+  var sizeSlider = document.getElementById("size-slider");
+  var sizeVal = document.getElementById("size-val");
+  sizeSlider.addEventListener("input", function () {
+    sizeMult = parseFloat(sizeSlider.value);
+    sizeVal.textContent = sizeMult.toFixed(2) + "×";
+    applyPointSettings();
+  });
+
+  var densitySlider = document.getElementById("density-slider");
+  var densityVal = document.getElementById("density-val");
+  densitySlider.addEventListener("input", function () {
+    densityFrac = parseFloat(densitySlider.value) / 100;
+    densityVal.textContent = Math.round(densityFrac * 100) + "%";
+    applyPointSettings();
+  });
+
+  document.getElementById("wireframe-toggle").addEventListener("change", function (e) {
+    wireframeVisible = e.target.checked;
+    getWireframeHouse().forEach(function (obj) { obj.visible = wireframeVisible; });
+  });
+
+  document.getElementById("instance-toggle").addEventListener("change", function (e) {
+    colorMode = e.target.checked ? "instance" : "uniform";
+    if (!currentWeek || currentWeek.type !== "overlay") return;
+    var built = objCache[currentWeek.label];
+    var oldObj = colorMode === "instance" ? built.voxel : built.instancePoints;
+    var newObj = colorMode === "instance" ? built.instancePoints : built.voxel;
+    scene.remove(oldObj);
+    scene.add(newObj);
+    currentObjects = currentObjects.filter(function (o) { return o !== oldObj; }).concat([newObj]);
+    applyPointSettings();
+  });
+
+  renderGroupSwitch();
+  renderWeekTabs();
+  loadWeek(activeGroup.items[0]);
+  document.getElementById("loading").style.display = "none";
+})();
+</script>
