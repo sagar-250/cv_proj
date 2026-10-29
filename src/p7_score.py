@@ -23,17 +23,25 @@ structurally hard-to-observe element (occluded, small, or just poorly
 covered by our exterior-orbit + interior-walkthrough camera scheme) at
 EVERY stage, not specifically "not built yet" -- exactly the conflation
 SPEC.md section 13 calls "the single easiest way to produce meaningless
-progress numbers." Measured: 136/1355 elements (10%) fall in this set.
+progress numbers." Measured on the committed run: ~320-380/1355 elements
+(~25%) fall in this set every stage.
+
+`--mask visibility` (ROADMAP R4, the default) replaces that fixed proxy with
+a per-stage test from p4_visibility.py: an undetected element counts as
+not_started only if, given this stage's cameras and the elements we did
+detect, it would have produced at least VISIBLE_MIN_EXPECTED points had it
+been built. `--mask final` keeps the old behaviour for comparison.
 
 Progress = sum(w_i * C_i) / sum(w_i) * 100, over non-uncertain elements,
 computed with two weightings (count, volume) per SPEC. Ground truth progress
 comes directly from each stage's manifest.json (which we have, since this is
 simulated data -- a real deployment wouldn't have this for comparison).
 
-Run: .venv/Scripts/python.exe src/p7_score.py
+Run: .venv/bin/python src/p7_score.py [--mask visibility|final]
 Output: data/status/{stage}/status.csv (per-element), results/main_table.csv
 (per-stage progress estimate vs ground truth), results/figures/p7_progress_error.png
 """
+import argparse
 import glob
 import json
 import os
@@ -47,18 +55,23 @@ import matplotlib.pyplot as plt
 BIM_CSV = "data/bim/bim_complete.csv"
 STATES_DIR = "data/states"
 MATCHES_DIR = "data/matches"
+POINTCLOUD_DIR = "data/pointclouds"
 STATUS_DIR = "data/status"
 OUT_TABLE = "results/main_table.csv"
 OUT_FIG = "results/figures/p7_progress_error.png"
 
 COMPLETED_THRESHOLD = 0.5
 PARTIAL_THRESHOLD = 0.15
+VISIBLE_MIN_EXPECTED = 30   # expected points (if built) needed to call an unseen element not_started
 
 
 def score_stage(stage_name, bim_df, well_covered_ids):
     manifest = json.load(open(os.path.join(STATES_DIR, stage_name, "manifest.json"), encoding="utf-8"))
     matches = json.load(open(os.path.join(MATCHES_DIR, stage_name, "matches.json"), encoding="utf-8"))
     match_by_gid = {m["global_id"]: m for m in matches}
+    if well_covered_ids is None:  # per-stage visibility mask
+        vis = json.load(open(os.path.join(MATCHES_DIR, stage_name, "visibility.json"), encoding="utf-8"))
+        well_covered_ids = {g for g, n in vis.items() if n >= VISIBLE_MIN_EXPECTED}
 
     rows = []
     for _, elem in bim_df.iterrows():
@@ -94,6 +107,30 @@ def score_stage(stage_name, bim_df, well_covered_ids):
     gt_progress_count = 100 * gt_c.sum() / len(scored_bim)
     gt_progress_volume = 100 * (gt_c * scored_bim["volume"]).sum() / scored_bim["volume"].sum()
 
+    # where the error comes from, per element (ground truth is eval-only)
+    truth = status_df["global_id"].map(lambda g: "built" if g in built_ids else
+                                       ("partial" if g in partial_frac else "none"))
+    st = status_df["status"]
+    diag = {
+        "n_missed_built": int(((truth != "none") & (st == "not_started")).sum()),
+        "n_false_built": int(((truth == "none") & st.isin(["completed", "partial"])).sum()),
+        "n_uncertain_built": int(((truth != "none") & (st == "uncertain")).sum()),
+        "n_uncertain_unbuilt": int(((truth == "none") & (st == "uncertain")).sum()),
+    }
+
+    # registration: the method's own verdict, and (eval only) its true error --
+    # mean displacement of the stage's points vs where they really belong
+    reg_ok, reg_err = None, None
+    reg_path = os.path.join(MATCHES_DIR, stage_name, "registration.json")
+    if os.path.exists(reg_path):
+        reg = json.load(open(reg_path, encoding="utf-8"))
+        reg_ok = bool(reg.get("ok", True))
+        pc = np.load(os.path.join(POINTCLOUD_DIR, f"{stage_name}.npz"))
+        xyz = pc["xyz"][::20].astype(np.float64)
+        T_est, T_true_inv = np.array(reg["T_cloud_to_bim"]), np.linalg.inv(pc["gt_T_bim_to_cloud"])
+        reg_err = float(np.linalg.norm((xyz @ T_est[:3, :3].T + T_est[:3, 3])
+                                       - (xyz @ T_true_inv[:3, :3].T + T_true_inv[:3, 3]), axis=1).mean())
+
     out_dir = os.path.join(STATUS_DIR, stage_name)
     os.makedirs(out_dir, exist_ok=True)
     status_df.to_csv(os.path.join(out_dir, "status.csv"), index=False)
@@ -110,20 +147,32 @@ def score_stage(stage_name, bim_df, well_covered_ids):
         "n_completed": int((status_df["status"] == "completed").sum()),
         "n_partial": int((status_df["status"] == "partial").sum()),
         "n_not_started": int((status_df["status"] == "not_started").sum()),
+        "signed_error_count": progress_count - gt_progress_count,
+        "registration_ok": reg_ok,
+        "registration_err_m": reg_err,
+        **diag,
     }
 
 
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--mask", choices=["visibility", "final"], default="visibility")
+    args = ap.parse_args()
     bim_df = pd.read_csv(BIM_CSV)
     stage_names = sorted(
         os.path.basename(p) for p in glob.glob(os.path.join(STATES_DIR, "*")) if os.path.isdir(p)
     )
 
-    # "ever observable" proxy: elements detected at the final (fully-built) stage
-    final_matches = json.load(open(os.path.join(MATCHES_DIR, stage_names[-1], "matches.json"), encoding="utf-8"))
-    well_covered_ids = {m["global_id"] for m in final_matches}
-    print(f"Coverage mask: {len(well_covered_ids)}/{len(bim_df)} elements ever detected "
-          f"at the fully-built reference stage ({stage_names[-1]})")
+    if args.mask == "final":
+        # "ever observable" proxy: elements detected at the final (fully-built) stage
+        final_matches = json.load(open(os.path.join(MATCHES_DIR, stage_names[-1], "matches.json"),
+                                       encoding="utf-8"))
+        well_covered_ids = {m["global_id"] for m in final_matches}
+        print(f"Coverage mask: {len(well_covered_ids)}/{len(bim_df)} elements ever detected "
+              f"at the fully-built reference stage ({stage_names[-1]})")
+    else:
+        well_covered_ids = None
+        print(f"Coverage mask: per-stage visibility (>= {VISIBLE_MIN_EXPECTED} expected points)")
 
     rows = [score_stage(s, bim_df, well_covered_ids) for s in stage_names]
     df = pd.DataFrame(rows)

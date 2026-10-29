@@ -154,23 +154,25 @@ def jitter_element(e, rng, t_mag, deg_mag):
 
 def clip_partial_height(e, frac):
     """Clip a wall/column's mesh to the bottom `frac` of its height -- a
-    partially built element (poured/erected but not finished)."""
-    verts, faces = e["verts"], e["faces"]
+    partially built element (poured/erected but not finished).
+
+    Clamps every vertex above the cutoff down to it. Walls and columns are
+    vertical extrusions, so this yields exactly the shorter prism (side faces
+    shortened, top cap moved down). The earlier version dropped every face
+    with any vertex above the cutoff -- on an extruded wall that is every
+    side face, leaving only the bottom cap hidden against the slab, so
+    "partial" walls were effectively invisible to the raycaster (measured:
+    ~100 partial elements per stage scored not_started)."""
+    verts = e["verts"]
     z0, z1 = e["z_min"], e["z_max"]
     if z1 - z0 < 1e-6:
         return e
     cutoff = z0 + frac * (z1 - z0)
-    keep_vert = verts[:, 2] <= cutoff
-    keep_face = keep_vert[faces].all(axis=1)
-    new_faces = faces[keep_face]
-    if new_faces.shape[0] == 0:
-        return None
-    used = np.unique(new_faces)
-    remap = -np.ones(verts.shape[0], dtype=np.int64)
-    remap[used] = np.arange(used.shape[0])
+    new_verts = verts.copy()
+    new_verts[:, 2] = np.minimum(new_verts[:, 2], cutoff)
     e2 = dict(e)
-    e2["verts"] = verts[used]
-    e2["faces"] = remap[new_faces]
+    e2["verts"] = new_verts
+    e2["z_max"] = float(cutoff)
     return e2
 
 
@@ -291,8 +293,12 @@ def interior_viewpoints(elements, footprint_center, footprint_radius):
     return viewpoints
 
 
-def raycast(scene, tri_class, tri_gid, viewpoints, center, rng):
+def raycast(scene, tri_class, tri_gid, viewpoints, center, rng, return_geometry=False):
+    """First-hit raycast. With return_geometry, also returns per-hit range (m),
+    |cos| of the incidence angle, and the ray direction -- what a range- and
+    angle-dependent sensor model needs."""
     all_hits, all_classes, all_gids = [], [], []
+    all_rng, all_cos, all_dir = [], [], []
     for kind, eye in viewpoints:
         if kind == "pinhole":
             origins, dirs = pinhole_rays(eye, center, EXT_FOV_DEG, EXT_GRID)
@@ -309,8 +315,16 @@ def raycast(scene, tri_class, tri_gid, viewpoints, center, rng):
         all_hits.append(hit_pts)
         all_classes.append(tri_class[prim_ids[valid]])
         all_gids.append(tri_gid[prim_ids[valid]])
-    return (np.concatenate(all_hits, axis=0), np.concatenate(all_classes, axis=0),
-            np.concatenate(all_gids, axis=0))
+        if return_geometry:
+            normals = result["primitive_normals"].numpy()[valid]
+            all_rng.append(t_hit[valid])
+            all_cos.append(np.abs((normals * dirs[valid]).sum(axis=1)))
+            all_dir.append(dirs[valid])
+    out = (np.concatenate(all_hits, axis=0), np.concatenate(all_classes, axis=0),
+           np.concatenate(all_gids, axis=0))
+    if return_geometry:
+        out += (np.concatenate(all_rng), np.concatenate(all_cos), np.concatenate(all_dir))
+    return out
 
 
 def make_ground(center, footprint_radius, base_z, rng, n=9000):
@@ -347,12 +361,46 @@ def make_trees(center, footprint_radius, base_z, rng, n_trees=4, pts_per_tree=70
     return np.concatenate(all_pts).astype(np.float32), np.concatenate(all_colors)
 
 
-def apply_rigid_jitter(pts, rng, t_mag, deg_mag):
+def apply_rigid_jitter(pts, rng, t_mag, deg_mag, return_transform=False):
+    """Whole-scene rigid offset. With return_transform, also returns the 4x4
+    T (BIM frame -> cloud frame) so registration error can be measured."""
     center = pts.mean(axis=0)
     axis = rng.normal(size=3)
     R = rotation_matrix(axis, rng.uniform(-deg_mag, deg_mag))
     t = rng.normal(0, t_mag, 3)
-    return (pts - center) @ R.T + center + t
+    out = (pts - center) @ R.T + center + t
+    if not return_transform:
+        return out
+    T = np.eye(4)
+    T[:3, :3] = R
+    T[:3, 3] = center - R @ center + t
+    return out, T
+
+
+def survey_offset(regime, rng, center):
+    """Whole-scene 4x4 offset (BIM frame -> survey frame) of the size a real
+    survey has before registration (ROADMAP R3):
+      gnss : drone photogrammetry georeferenced by on-board GNSS + compass.
+             ~N(0, 2 m) horizontal, ~N(0, 1 m) vertical, heading +/-15 deg,
+             tilt ~N(0, 0.5 deg), scale ~N(1, 1%).
+      local: indoor SLAM/LiDAR in its own start frame. Any heading, up to
+             30 m horizontally / 5 m vertically, tilt ~N(0, 0.5 deg), metric scale.
+    Rotation and scale act about `center`."""
+    if regime == "gnss":
+        t = np.array([rng.normal(0, 2), rng.normal(0, 2), rng.normal(0, 1)])
+        yaw = rng.uniform(-15, 15)
+        scale = rng.normal(1, 0.01)
+    else:
+        t = np.concatenate([rng.uniform(-30, 30, 2), rng.uniform(-5, 5, 1)])
+        yaw = rng.uniform(-180, 180)
+        scale = 1.0
+    R = rotation_matrix(np.array([0, 0, 1.0]), yaw)
+    tilt_axis = np.array([rng.normal(), rng.normal(), 0.0])
+    R = rotation_matrix(tilt_axis, rng.normal(0, 0.5)) @ R
+    T = np.eye(4)
+    T[:3, :3] = scale * R
+    T[:3, 3] = center - scale * R @ center + t
+    return T
 
 
 def pack_entry(label, pts, colors, n_full, focus_center, focus_radius):

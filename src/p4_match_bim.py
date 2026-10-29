@@ -16,13 +16,16 @@ Method:
      unchanged, across every stage -- it doesn't matter that most elements
      aren't built yet at an early stage; a point near an unbuilt element's
      future location is simply evidence there's nothing there yet.
-  2. Per stage: the point cloud has a whole-scene rigid registration offset
-     baked in on purpose (p2_p3_simulate_stages.py's REG_JITTER, modelling
-     that a real reconstruction is never perfectly pre-aligned to the BIM).
-     Undo it with ICP against the BIM sample cloud, coarse-filtering first
-     to keep only points already near some BIM surface (so ground/tree
-     clutter, which has no BIM correspondence at all, doesn't drag the
-     alignment off).
+  2. Per stage: the point cloud has a whole-scene registration offset baked
+     in on purpose (p3_render.py: REG_JITTER, plus a GNSS- or SLAM-sized
+     offset with --georef). Undo it with `--registration plan` (default,
+     src/registration.py: gravity-aligned floor-plan search + robust ICP,
+     handles metre/any-heading offsets and flags failures) or
+     `--registration icp_old` (the original: plain ICP after keeping only
+     points already within 0.5 m of the BIM; only works for offsets of a few
+     cm, see results/r3_registration_summary.md). The estimate and its
+     self-check are saved to registration.json; downstream steps use only
+     that estimate.
   3. After alignment, nearest-neighbour query per point against the KD-tree
      with a TIGHT distance threshold (matched to the simulator's sensor
      noise + per-element jitter, not the registration jitter -- that's
@@ -38,8 +41,9 @@ heuristics entirely for the matching step -- Phase 6 (SPEC.md's matching
 cost/Hungarian assignment) becomes almost unnecessary too, since assignment
 is already correct by construction (subject to registration accuracy).
 
-Run: .venv/Scripts/python.exe src/p4_match_bim.py [--stage NAME]
-Output: data/matches/{stage}/matches.json (one record per detected element)
+Run: .venv/bin/python src/p4_match_bim.py [--stage NAME] [--registration plan|icp_old] [--prior gnss|none]
+Output: data/matches/{stage}/matches.json (one record per detected element),
+        data/matches/{stage}/registration.json (estimated cloud->BIM transform + checks)
 """
 import argparse
 import glob
@@ -56,6 +60,7 @@ from scipy.spatial import cKDTree
 
 sys.path.insert(0, os.path.dirname(__file__))
 from p1_parse import obb_xy  # noqa: E402
+import registration  # noqa: E402
 
 IFC_PATH = "data/raw/schependomlaan/Design model IFC/IFC Schependomlaan.ifc"
 CSV_PATH = "data/bim/bim_complete.csv"
@@ -214,12 +219,20 @@ def apply_transform(xyz, T):
     return (xyz_h @ T.T)[:, :3]
 
 
-def match_stage(stage_name, tree, icp_target, tree_gid, bim_df):
+def match_stage(stage_name, tree, icp_target, tree_gid, bim_df, reg_target=None, method="icp_old",
+                prior="gnss"):
     data = np.load(os.path.join(POINTCLOUD_DIR, f"{stage_name}.npz"))
     xyz = data["xyz"].astype(np.float64)
-    gt_class, gt_gid = data["gt_class"], data["gt_global_id"]  # held out, eval only
 
-    T = register_to_bim(xyz, tree, icp_target)
+    if method == "plan":
+        T, info = registration.register(xyz, reg_target, method="plan", prior=prior,
+                                        with_scale=(prior == "gnss"), verbose=True)
+    else:
+        T, info = register_to_bim(xyz, tree, icp_target), {"ok": True, "failed_checks": ""}
+    if not info["ok"]:
+        print(f"  WARNING: registration failed its own checks ({info['failed_checks']}) -- "
+              f"stage results are not trustworthy")
+    match_stage.last_registration = {"method": method, "prior": prior, "T_cloud_to_bim": T.tolist(), **info}
     xyz_reg = apply_transform(xyz, T)
 
     dist_k, idx_k = tree.query(xyz_reg, k=ASSIGN_K, workers=-1)
@@ -304,11 +317,15 @@ def match_stage_cached(stage_name, tree, icp_target, tree_gid, bim_df):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--stage", default=None)
+    parser.add_argument("--registration", choices=["plan", "icp_old"], default="plan")
+    parser.add_argument("--prior", choices=["gnss", "none"], default="gnss",
+                        help="gnss: drone photogrammetry (metres off, scale ~1%%); none: SLAM in its own frame")
     args = parser.parse_args()
 
     bim_df = pd.read_csv(CSV_PATH)
     tree, sample_xyz, tree_gid, icp_target = build_bim_sample_tree()
     print(f"Sample tree memory: xyz {sample_xyz.nbytes/1e6:.1f}MB, gid {tree_gid.nbytes/1e6:.1f}MB")
+    reg_target = registration.BimTarget(sample_xyz.astype(np.float64)) if args.registration == "plan" else None
 
     if args.stage:
         stage_names = [args.stage]
@@ -320,11 +337,14 @@ def main():
 
     for stage_name in stage_names:
         print(f"\n{stage_name}:")
-        matches, xyz_reg, assigned_gid = match_stage(stage_name, tree, icp_target, tree_gid, bim_df)
+        matches, xyz_reg, assigned_gid = match_stage(stage_name, tree, icp_target, tree_gid, bim_df,
+                                                     reg_target, args.registration, args.prior)
         out_dir = os.path.join(OUT_DIR, stage_name)
         os.makedirs(out_dir, exist_ok=True)
         with open(os.path.join(out_dir, "matches.json"), "w", encoding="utf-8") as f:
             json.dump(matches, f, indent=2)
+        with open(os.path.join(out_dir, "registration.json"), "w", encoding="utf-8") as f:
+            json.dump(match_stage.last_registration, f, indent=2)
         print(f"  {len(matches)} elements detected (>= {MIN_POINTS_DETECTED} points each)")
 
     print(f"\nWrote matches for {len(stage_names)} stage(s) under {OUT_DIR}/")
