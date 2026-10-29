@@ -97,6 +97,24 @@ Images are PNG, animations are GIF (they play in any browser or image viewer), a
 |---|---|
 | [busy_site_world.png](09_busy_site/busy_site_world.png) | The busier site the scanner can now see (`p3_render.py --site busy`). It adds scaffolding along the walls, a tower crane, a site fence, shoring poles under the newest floor, material piles and workers. A few elements (pink) are built 4–12 cm away from where the design says. None of this is in the BIM, so the pipeline has to cope with it. |
 
+## 10. Materials and camera colour (new)
+
+Made by `make_media.py --only colors`. Uses the colour clouds in `data/pointclouds_color/`, made by `p3_render.py --sensor realistic --site busy --out data/pointclouds_color`.
+
+| File | What it shows |
+|---|---|
+| [bim_by_material.png](10_materials_color/bim_by_material.png) | Every element in the colour of its material, read from the IFC's own material list (`src/materials.py` -> `data/bim/bim_materials.csv`). These are the catalogue colours the matching side knows. Brick facades, a grey roof, a yellow insulation roof at the back, and grey floors and inner walls. |
+| [design_model_by_material.ply](10_materials_color/design_model_by_material.ply) | The same model as a 3D file. |
+| [colour_tables.png](10_materials_color/colour_tables.png) | **Left:** the catalogue colour (what the matcher knows) next to the colour the renderer really uses. They differ on purpose. **Right:** the colours the way registration compares them, with brightness removed. Nine materials, plus scaffolding and fence, all sit in the same grey spot, so colour can't tell them apart. Only brick, primer steel, wood, plywood and insulation stand out. Brick piles land right next to brick, so colour can't filter them out either. |
+| [scan_camera_colour.png](10_materials_color/scan_camera_colour.png) | The scan before (colour = element type, which is ground truth and never used) and now (simulated camera colour). The close-up shows a stage 15 facade: brick tint changing per element, sun and shadow, and darker dirt at the foot. Grey patches are the design model showing through where the drone saw nothing. |
+| [stage_06_scan_camera_colour.ply](10_materials_color/stage_06_scan_camera_colour.ply) | The stage 06 colour scan as a 3D file, placed on the design. |
+| [material_substitutions.png](10_materials_color/material_substitutions.png) | Built is not always as designed. 91 elements (7%) are rendered from a different material than the BIM says (for example, steel still in primer, or yellow brick instead of brown). The matcher is not told. |
+| [colour_filter.png](10_materials_color/colour_filter.png) | Points the colour filter drops because their colour fits no material in the BIM (red). It drops about half of the tree points and 40% of the crane points, and no building points. Grey scaffolding and brick piles get through, as intended. |
+| [colour_agreement_poses.gif](10_materials_color/colour_agreement_poses.gif) (frames: [right pose](10_materials_color/colour_agreement_right_pose.png), [one storey too high](10_materials_color/colour_agreement_wrong_storey.png)) | How colour scores a candidate pose. Green points fit the material they land on, red ones don't. Numbers are in `colour_agreement_poses.csv`. **Honest result:** colour clearly penalises the pose one storey too high (fit 0.57 vs 0.70: brick lands on grey floors). It does **not** penalise a 3 m sideways shift or a 180° turn (fit 0.71 and 0.68), because the facade is brick all round. Those cases are still decided by geometry (share of points on a BIM surface: 51% right vs 25–35% wrong). |
+| [bench_errors.png](10_materials_color/bench_errors.png) | The colour registration benchmark: `plan` vs `plan_color_rank` vs `plan_color_wrongcat` (deliberately wrong material catalogue), error per case. Rebuild it with `--only colors` after the benchmark finishes; it shows whatever runs are done so far. A first version let colour overrule clear geometry, and with the wrong catalogue it put stage 00 3.3 m off without a warning (`results/experiments/r3_bench_color_v0_ungated.csv`). Now colour only breaks near-ties. |
+
+Note: 50 of the 51 hardwood elements in the IFC have no geometry (they are never in any scan), so the charts count only elements with geometry.
+
 ## Other viewers already in the project
 
 - `src/pointcloud_viewer.html`: an interactive point-cloud viewer in the browser for all stages. It reads `results/pointcloud_viewer_data.js`.

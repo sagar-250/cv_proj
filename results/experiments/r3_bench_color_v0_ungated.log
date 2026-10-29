@@ -1,0 +1,4 @@
+BIM target prepared in 20.9s
+00_m1_fundering_structur gnss  #00 plan     err=   0.011 m  OK  flagged=False  (117.9s)
+00_m1_fundering_structur gnss  #00 plan_color_rank err=   0.011 m  OK  flagged=False  (111.7s)
+00_m1_fundering_structur gnss  #00 plan_color_wrongcat err=   3.333 m  FAIL flagged=False  (230.8s)

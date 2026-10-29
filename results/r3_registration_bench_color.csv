@@ -1,0 +1,2 @@
+stage,regime,trial,method,err_m,success,secs,self_ok,fitness,tilt_deg,ambiguity,failed_checks,tight_fit,color_fit,runner_color_fit,tight_ambiguity
+00_m1_fundering_structure,gnss,0,plan,0.011189491225552588,True,302.1281850337982,True,0.34843653504404926,0.38085733981011366,0.6955765551626182,,0.2173978800902411,,,

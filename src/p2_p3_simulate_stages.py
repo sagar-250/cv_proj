@@ -295,11 +295,14 @@ def interior_viewpoints(elements, footprint_center, footprint_radius):
 
 def raycast(scene, tri_class, tri_gid, viewpoints, center, rng, return_geometry=False):
     """First-hit raycast. With return_geometry, also returns per-hit range (m),
-    |cos| of the incidence angle, and the ray direction -- what a range- and
-    angle-dependent sensor model needs."""
+    |cos| of the incidence angle, the ray direction, and whether the hit came
+    from a drone photo (pinhole) rather than an indoor scan -- what a range-
+    and angle-dependent sensor model needs, plus the hit triangle's normal
+    (as Open3D gives it, not flipped toward the camera) and the index of the
+    viewpoint that saw it (for camera colour: sun shading, exposure)."""
     all_hits, all_classes, all_gids = [], [], []
-    all_rng, all_cos, all_dir = [], [], []
-    for kind, eye in viewpoints:
+    all_rng, all_cos, all_dir, all_photo, all_nrm, all_view = [], [], [], [], [], []
+    for vi, (kind, eye) in enumerate(viewpoints):
         if kind == "pinhole":
             origins, dirs = pinhole_rays(eye, center, EXT_FOV_DEG, EXT_GRID)
         else:
@@ -320,10 +323,14 @@ def raycast(scene, tri_class, tri_gid, viewpoints, center, rng, return_geometry=
             all_rng.append(t_hit[valid])
             all_cos.append(np.abs((normals * dirs[valid]).sum(axis=1)))
             all_dir.append(dirs[valid])
+            all_photo.append(np.full(int(valid.sum()), kind == "pinhole"))
+            all_nrm.append(normals)
+            all_view.append(np.full(int(valid.sum()), vi))
     out = (np.concatenate(all_hits, axis=0), np.concatenate(all_classes, axis=0),
            np.concatenate(all_gids, axis=0))
     if return_geometry:
-        out += (np.concatenate(all_rng), np.concatenate(all_cos), np.concatenate(all_dir))
+        out += (np.concatenate(all_rng), np.concatenate(all_cos), np.concatenate(all_dir),
+                np.concatenate(all_photo), np.concatenate(all_nrm), np.concatenate(all_view))
     return out
 
 

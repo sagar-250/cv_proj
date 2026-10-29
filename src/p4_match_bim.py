@@ -25,7 +25,9 @@ Method:
      points already within 0.5 m of the BIM; only works for offsets of a few
      cm, see results/r3_registration_summary.md). The estimate and its
      self-check are saved to registration.json; downstream steps use only
-     that estimate.
+     that estimate. `--registration plan_color` (src/color_registration.py)
+     also uses the scan's camera colour against the BIM's material list;
+     it needs clouds from p3_render.py --color material.
   3. After alignment, nearest-neighbour query per point against the KD-tree
      with a TIGHT distance threshold (matched to the simulator's sensor
      noise + per-element jitter, not the registration jitter -- that's
@@ -41,7 +43,7 @@ heuristics entirely for the matching step -- Phase 6 (SPEC.md's matching
 cost/Hungarian assignment) becomes almost unnecessary too, since assignment
 is already correct by construction (subject to registration accuracy).
 
-Run: .venv/bin/python src/p4_match_bim.py [--stage NAME] [--registration plan|icp_old] [--prior gnss|none]
+Run: .venv/bin/python src/p4_match_bim.py [--stage NAME] [--registration plan|plan_color|icp_old] [--prior gnss|none]
 Output: data/matches/{stage}/matches.json (one record per detected element),
         data/matches/{stage}/registration.json (estimated cloud->BIM transform + checks)
 """
@@ -61,6 +63,8 @@ from scipy.spatial import cKDTree
 sys.path.insert(0, os.path.dirname(__file__))
 from p1_parse import obb_xy  # noqa: E402
 import registration  # noqa: E402
+import color_registration  # noqa: E402
+import materials  # noqa: E402
 
 IFC_PATH = "data/raw/schependomlaan/Design model IFC/IFC Schependomlaan.ifc"
 CSV_PATH = "data/bim/bim_complete.csv"
@@ -227,6 +231,12 @@ def match_stage(stage_name, tree, icp_target, tree_gid, bim_df, reg_target=None,
     if method == "plan":
         T, info = registration.register(xyz, reg_target, method="plan", prior=prior,
                                         with_scale=(prior == "gnss"), verbose=True)
+    elif method == "plan_color":
+        # "class" colour would be ground truth (the IFC class), so refuse it
+        assert "rgb_source" in data and str(data["rgb_source"]) == "camera", \
+            "plan_color needs p3_render.py --color material clouds"
+        T, info = color_registration.register(xyz, data["rgb"], reg_target, prior=prior,
+                                              with_scale=(prior == "gnss"), verbose=True)
     else:
         T, info = register_to_bim(xyz, tree, icp_target), {"ok": True, "failed_checks": ""}
     if not info["ok"]:
@@ -317,7 +327,7 @@ def match_stage_cached(stage_name, tree, icp_target, tree_gid, bim_df):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--stage", default=None)
-    parser.add_argument("--registration", choices=["plan", "icp_old"], default="plan")
+    parser.add_argument("--registration", choices=["plan", "plan_color", "icp_old"], default="plan")
     parser.add_argument("--prior", choices=["gnss", "none"], default="gnss",
                         help="gnss: drone photogrammetry (metres off, scale ~1%%); none: SLAM in its own frame")
     args = parser.parse_args()
@@ -325,7 +335,12 @@ def main():
     bim_df = pd.read_csv(CSV_PATH)
     tree, sample_xyz, tree_gid, icp_target = build_bim_sample_tree()
     print(f"Sample tree memory: xyz {sample_xyz.nbytes/1e6:.1f}MB, gid {tree_gid.nbytes/1e6:.1f}MB")
-    reg_target = registration.BimTarget(sample_xyz.astype(np.float64)) if args.registration == "plan" else None
+    reg_target = None
+    if args.registration == "plan":
+        reg_target = registration.BimTarget(sample_xyz.astype(np.float64))
+    elif args.registration == "plan_color":
+        reg_target = color_registration.ColorTarget(sample_xyz.astype(np.float64), tree_gid,
+                                                    materials.load_categories())
 
     if args.stage:
         stage_names = [args.stage]

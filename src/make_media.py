@@ -15,8 +15,8 @@ seeded, so reruns give identical files. Needs the outputs of P2-P7 and
 data/bim/bim_meshes.npz (made by p4_visibility.py); does not rerun any phase,
 except that the "sensor" section re-simulates one stage in memory.
 
-Run: .venv/bin/python src/make_media.py [--only charts,truth,scans,sensor,clip,registration,visibility,errors,models,flow,site]
-Output: media/ (folders 00_overview ... 09_busy_site)
+Run: .venv/bin/python src/make_media.py [--only charts,truth,scans,sensor,clip,registration,visibility,errors,models,flow,site,colors]
+Output: media/ (folders 00_overview ... 10_materials_color)
 """
 import argparse
 import glob
@@ -874,6 +874,232 @@ def busy_site():
     print("busy site done")
 
 
+# ------------------------------------------------------------------ 10 materials + colour
+
+COLOR_CLOUD_DIR = "data/pointclouds_color"   # p3_render.py --sensor realistic --site busy --out ...
+COLOR_BENCH = "results/r3_registration_bench_color.csv"
+
+
+def _closest(bim, xyz):
+    """(distance, element index) of the nearest BIM triangle for each point."""
+    scene = o3d.t.geometry.RaycastingScene()
+    mesh = o3d.t.geometry.TriangleMesh()
+    mesh.vertex.positions = o3d.core.Tensor(bim.verts.astype(np.float32))
+    mesh.triangle.indices = o3d.core.Tensor(bim.faces.astype(np.uint32))
+    scene.add_triangles(mesh)
+    q = o3d.core.Tensor(xyz.astype(np.float32))
+    res = scene.compute_closest_points(q)
+    d = np.linalg.norm(res["points"].numpy() - xyz, axis=1)
+    return d, bim.tri_elem[res["primitive_ids"].numpy()]
+
+
+def colors_media():
+    import materials
+    import color_registration as cr
+    import p3_render
+    d = out_dir("10_materials_color")
+    bim = Bim()
+    cats = materials.load_categories()
+    elem_cat = np.array([cats.get(g, materials.DEFAULT) for g in bim.gids])
+    cat_rgb = {c: np.array(v) / 255 for c, v in materials.CATALOGUE_RGB.items()}
+    counts = pd.Series(elem_cat).value_counts()
+
+    # 1. what the BIM knows: every element in its catalogue colour
+    tcol = np.array([cat_rgb[c] for c in elem_cat])[bim.tri_elem]
+    ims = [render(bim.verts, bim.faces, tcol, *view(bim, az=az, dist=2.6), 800, 580, tri_elem=bim.tri_elem)
+           for az in (-55, 125)]
+    cut = bim.verts[:, 2] < 3.2   # ground floor only, to see the inside walls
+    keep = cut[bim.faces].all(axis=1)
+    ims.append(render(bim.verts, bim.faces[keep], tcol[keep], *view(bim, az=-60, el=60, dist=2.2), 800, 580,
+                      tri_elem=bim.tri_elem[keep]))
+    legend = [(f"{c} ({counts.get(c, 0)})", cat_rgb[c]) for c in counts.index]
+    fig = panels(ims, ["Front", "Back", "Ground floor from above (upper floors removed)"],
+                 "What the BIM says each element is made of (src/materials.py, from the IFC's own materials), "
+                 "drawn in the catalogue colour the matcher knows", ncols=3, scale=0.8)
+    fig.legend(handles=[Patch(color=c, label=l) for l, c in legend], loc="lower center",
+               ncol=6, fontsize=10, frameon=False)
+    fig.subplots_adjust(bottom=0.16)
+    fig.savefig(os.path.join(d, "bim_by_material.png"), dpi=100)
+    plt.close(fig)
+    write_mesh(os.path.join(d, "design_model_by_material.ply"), bim.verts, bim.faces, tcol)
+
+    # 2. catalogue vs renderer colours: different on purpose, and many greys look alike
+    fig, axes = plt.subplots(1, 2, figsize=(16, 7.5), gridspec_kw={"width_ratios": [1, 1.1]})
+    ax = axes[0]
+    order = materials.CATEGORIES
+    for i, c in enumerate(order):
+        ax.add_patch(plt.Rectangle((0, -i), 1, 0.85, color=cat_rgb[c]))
+        ax.add_patch(plt.Rectangle((1.1, -i), 1, 0.85, color=np.array(p3_render.RENDER_RGB[c]) / 255))
+        ax.text(2.25, -i + 0.42, f"{c}  ({counts.get(c, 0)} elements with geometry)", va="center", fontsize=10)
+    ax.text(0.5, 1.05, "BIM catalogue\n(matcher knows)", ha="center", fontsize=10)
+    ax.text(1.6, 1.05, "renderer\n(camera sees)", ha="center", fontsize=10)
+    ax.set_xlim(0, 5)
+    ax.set_ylim(-len(order) + 0.5, 1.8)
+    ax.axis("off")
+    ax.set_title("Two separate colour tables")
+    ax = axes[1]
+    for c in order:
+        a = cr.chroma(np.array([materials.CATALOGUE_RGB[c]]))[0]
+        b = cr.chroma(np.array([p3_render.RENDER_RGB[c]]))[0]
+        ax.plot([a[0], b[0]], [a[1], b[1]], color="#999", lw=0.8)
+        ax.scatter(*a, s=140, color=cat_rgb[c], edgecolor="k", marker="o")
+        ax.scatter(*b, s=140, color=np.array(p3_render.RENDER_RGB[c]) / 255, edgecolor="k", marker="s")
+        if np.linalg.norm(a - [1 / 3, 1 / 3]) > 0.02:   # the greys all sit on top of each other
+            ax.annotate(c, a, fontsize=8, xytext=(5, 4), textcoords="offset points")
+    ax.annotate("9 grey materials + scaffold + fence:\ncolour can't tell them apart", (0.335, 0.375),
+                fontsize=9, ha="center")
+    for c, v in p3_render.CLUTTER_RENDER_RGB.items():
+        b = cr.chroma(np.array([v]))[0]
+        ax.scatter(*b, s=110, color=np.array(v) / 255, edgecolor="r", marker="^")
+        if np.linalg.norm(b - [1 / 3, 1 / 3]) > 0.02:
+            ax.annotate(c, b, fontsize=8, color="r", xytext=(5, -9), textcoords="offset points")
+    circ = plt.Circle(cr.chroma(np.array([materials.CATALOGUE_RGB["concrete_cast"]]))[0], cr.CHROMA_SIGMA,
+                      fill=False, ls="--", color="k")
+    ax.add_patch(circ)
+    ax.set_xlabel("red share  r / (r+g+b)")
+    ax.set_ylabel("green share  g / (r+g+b)")
+    ax.set_aspect("equal")
+    ax.set_title("Colour as the registration compares it (brightness removed)\n"
+                 "o catalogue, □ renderer, ▲ site clutter; dashed circle = allowed spread")
+    fig.tight_layout()
+    fig.savefig(os.path.join(d, "colour_tables.png"), dpi=100)
+    plt.close(fig)
+
+    # 3. the scan: camera colour vs the old class colour, and a close-up
+    s = "06_01_eerste_verdieping_envelope"
+    c = np.load(os.path.join(COLOR_CLOUD_DIR, f"{s}.npz"))
+    Ti = np.linalg.inv(c["gt_T_bim_to_cloud"])
+    xyz = c["xyz"].astype(np.float64) @ Ti[:3, :3].T + Ti[:3, 3]
+    cls_col = np.array([np.array(p3_render.CLASS_COLOR.get(k, (200, 200, 200))) / 255 for k in c["gt_class"]])
+    for k, v in p3_render.site_clutter.CLUTTER_COLOR.items():
+        cls_col[c["gt_class"] == k] = np.array(v) / 255
+    cam = c["rgb"] / 255
+    E, F0 = np.zeros((0, 3)), np.zeros((0, 3), np.int64)
+    ev = view(bim, az=-55, el=28, dist=2.4)
+    # close-up: outside of a brick facade at the finished stage
+    c15 = np.load(os.path.join(COLOR_CLOUD_DIR, "15_04_dak_envelope.npz"))
+    T15 = np.linalg.inv(c15["gt_T_bim_to_cloud"])
+    xyz15 = c15["xyz"].astype(np.float64) @ T15[:3, :3].T + T15[:3, 3]
+    c0 = bim.center.copy()
+    c0[2] = 3.0
+    eye = c0 + np.array([np.cos(np.radians(-55)), np.sin(np.radians(-55)), 0.12]) * bim.radius * 2.6
+    ims = [render(E, F0, np.zeros((0, 3)), *ev, 800, 580, points=[(xyz, cls_col, 2, False)]),
+           render(E, F0, np.zeros((0, 3)), *ev, 800, 580, points=[(xyz, cam, 2, False)]),
+           # white design mesh only as a depth buffer, so points behind the facade are hidden
+           render(bim.verts, bim.faces, np.ones((len(bim.faces), 3)) / 0.99, eye, c0, 800, 580, fov=22, ss=1,
+                  points=[(xyz15, c15["rgb"] / 255, 4, True)])]
+    fig = panels(ims, ["Before: colour = IFC class (ground truth, never used)",
+                       "Now: simulated camera colour (p3_render.py --color material)",
+                       "Stage 15 facade: brick tint per element, sun and shadow, dirt at the foot"],
+                 f"Stage {short(s)}, busy site, realistic sensor", ncols=3, scale=0.8)
+    fig.savefig(os.path.join(d, "scan_camera_colour.png"), dpi=100)
+    plt.close(fig)
+    k = np.random.default_rng(SEED).choice(len(xyz), min(300_000, len(xyz)), replace=False)
+    write_ply(os.path.join(d, f"stage_{s[:2]}_scan_camera_colour.ply"), xyz[k], cam[k])
+
+    # 4. elements built from another material than designed (renderer only, matcher doesn't know)
+    p3_render.LOOK = {}
+    all_el = {g: {"z_min": 0.0} for g in bim.gids}
+    look = p3_render.element_looks(all_el)
+    swapped = np.array([look[g][0] != cats.get(g, materials.DEFAULT) for g in bim.gids])
+    rcol = np.array([np.array(p3_render.RENDER_RGB[look[g][0]]) / 255 * np.clip(look[g][1], 0, 2) for g in bim.gids])
+    hl = np.where(swapped[:, None], np.array([0.9, 0.1, 0.6]), np.clip(rcol, 0, 1) * 0.4 + 0.55)
+    ims = [render(bim.verts, bim.faces, np.clip(rcol, 0, 1)[bim.tri_elem], *view(bim, dist=2.6), 800, 580,
+                  tri_elem=bim.tri_elem),
+           render(bim.verts, bim.faces, hl[bim.tri_elem], *view(bim, dist=2.6), 800, 580, tri_elem=bim.tri_elem)]
+    fig = panels(ims, ["Renderer colour per element (tint varies per element, like brick batches)",
+                       f"Pink: {swapped.sum()} elements ({swapped.mean():.0%}) built from a different "
+                       "material than the BIM says"],
+                 "Built is not always as designed: the matcher is not told about these", ncols=2, scale=0.85)
+    fig.savefig(os.path.join(d, "material_substitutions.png"), dpi=100)
+    plt.close(fig)
+
+    # 5. colour filter + colour agreement at the right pose and at wrong poses
+    rng = np.random.default_rng(SEED)
+    s = "03_00_begane_grond_envelope"
+    c = np.load(os.path.join(COLOR_CLOUD_DIR, f"{s}.npz"))
+    Ti = np.linalg.inv(c["gt_T_bim_to_cloud"])
+    k = rng.choice(len(c["xyz"]), min(200_000, len(c["xyz"])), replace=False)
+    xyz = c["xyz"][k].astype(np.float64) @ Ti[:3, :3].T + Ti[:3, 3]
+    rgb, gcls = c["rgb"][k], c["gt_class"][k]
+    cat_chroma = cr.chroma(np.array([materials.CATALOGUE_RGB[q] for q in materials.CATEGORIES]))
+    fit = cr.material_fit(rgb, cat_chroma)
+    dropped = fit.max(axis=1) < cr.MIN_FIT
+    groups = ["IfcWall", "IfcSlab", "IfcBeam", "ground", "tree", "crane", "scaffold", "fence", "pile", "worker"]
+    share = [dropped[gcls == g].mean() * 100 if (gcls == g).any() else 0 for g in groups]
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6), gridspec_kw={"width_ratios": [1.3, 1]})
+    axes[0].imshow(render(E, F0, np.zeros((0, 3)), *view(bim, az=-50, el=30, dist=2.6), 800, 560,
+                          points=[(xyz[~dropped], np.full(3, 0.75), 2, False), (xyz[dropped], (0.85, 0.1, 0.1), 3, False)]))
+    axes[0].axis("off")
+    axes[0].set_title(f"Stage {short(s)}: red = dropped by the colour filter (fits no BIM material)")
+    axes[1].barh(groups[::-1], share[::-1], color=["#c33" if g in ("tree", "crane", "worker") else "#888" for g in groups[::-1]])
+    axes[1].set_xlabel("% of points dropped (ground truth class used only for this chart)")
+    for i, v in enumerate(share[::-1]):
+        axes[1].text(v + 0.5, i, f"{v:.1f}%", va="center")
+    axes[1].set_xlim(0, 100)
+    axes[1].set_title("Building is kept; green trees and yellow crane are partly dropped;\n"
+                      "grey scaffolding and brick piles pass on purpose (colour can't tell)")
+    fig.tight_layout()
+    fig.savefig(os.path.join(d, "colour_filter.png"), dpi=100)
+    plt.close(fig)
+
+    def pose(dx=0.0, dy=0.0, dz=0.0, yaw=0.0):
+        T = np.eye(4)
+        t = np.radians(yaw)
+        T[:2, :2] = [[np.cos(t), -np.sin(t)], [np.sin(t), np.cos(t)]]
+        cc = xyz.mean(axis=0)
+        T[:3, 3] = cc - T[:3, :3] @ cc + [dx, dy, dz]
+        return T
+    poses = [("right pose", pose()), ("shifted 3 m along x", pose(dx=3.0)),
+             ("one storey too high (+2.9 m)", pose(dz=2.9)), ("turned 180 deg", pose(yaw=180))]
+    frames, rows = [], []
+    for name, T in poses:
+        p = xyz @ T[:3, :3].T + T[:3, 3]
+        dist, el = _closest(bim, p)
+        near = dist < 0.05
+        ci = np.array([materials.CATEGORIES.index(q) for q in elem_cat])[el]
+        agree = fit[np.arange(len(p)), ci]
+        col = np.full((len(p), 3), 0.82)
+        col[near] = np.stack([1 - agree[near], 0.25 + 0.6 * agree[near], 0.3 * np.ones(near.sum())], axis=1)
+        tight, cfit = near.mean(), agree[near].mean() if near.any() else 0
+        rows.append((name, tight, cfit, tight * cfit))
+        im = render(bim.verts, bim.faces, np.tile(GHOST, (len(bim.faces), 1)), *view(bim, dist=2.6), 800, 580,
+                    points=[(p, col, 2, False)])
+        fig = panels([im], [f"{name}: {tight:.0%} of points on a BIM surface, colour fit {cfit:.2f}, "
+                            f"score {tight * cfit:.3f}"],
+                     "Green = colour fits the material it lands on, red = doesn't,\n"
+                     "light grey = not on any BIM surface (dark grey = the design model)", scale=1.0)
+        frames.append(fig_to_pil(fig))
+    save_gif(frames, os.path.join(d, "colour_agreement_poses.gif"), ms=1600)
+    frames[0].save(os.path.join(d, "colour_agreement_right_pose.png"))
+    frames[2].save(os.path.join(d, "colour_agreement_wrong_storey.png"))
+    pd.DataFrame(rows, columns=["pose", "share_on_bim", "colour_fit", "score"]).to_csv(
+        os.path.join(d, "colour_agreement_poses.csv"), index=False, float_format="%.4f")
+    print(pd.DataFrame(rows, columns=["pose", "share_on_bim", "colour_fit", "score"]).to_string(index=False))
+
+    # 6. benchmark so far (fills in as the bench runs)
+    if os.path.exists(COLOR_BENCH):
+        b = pd.read_csv(COLOR_BENCH)
+        b["case"] = b["stage"].str[:2] + " " + b["regime"]
+        piv = b.pivot_table(index="case", columns="method", values="err_m")
+        fig, ax = plt.subplots(figsize=(13, 5.5))
+        piv.mul(100).plot.bar(ax=ax, width=0.8, color=["#555", "#2a7", "#d84"][:piv.shape[1]])
+        ax.axhline(5, color="r", ls="--", lw=1)
+        ax.text(0, 5.2, "success limit 5 cm", color="r")
+        ax.set_ylabel("registration error (cm, mean BIM point displacement)")
+        ax.set_yscale("log")
+        ax.set_ylim(0.5, max(10, piv.max().max() * 100 * 2))
+        ax.set_title(f"Registration benchmark on busy + realistic colour clouds ({len(b)} runs so far): "
+                     "plan vs colour versions (wrongcat = deliberately wrong material catalogue)")
+        flagged = b[~b["self_ok"].astype(bool)]
+        for _, r in flagged.iterrows():
+            ax.text(list(piv.index).index(r["case"]), r["err_m"] * 100, "flag", ha="center", fontsize=8)
+        fig.tight_layout()
+        fig.savefig(os.path.join(d, "bench_errors.png"), dpi=100)
+        plt.close(fig)
+    print("colours done")
+
+
 # ------------------------------------------------------------------ 08 3D files
 
 def write_ply(path, xyz, rgb, faces=None):
@@ -972,7 +1198,7 @@ def flow():
 
 SECTIONS = {"flow": flow, "charts": charts, "truth": truth, "scans": scans, "sensor": sensor, "clip": clip,
             "registration": registration_media, "visibility": visibility, "errors": errors, "models": models,
-            "site": busy_site}
+            "site": busy_site, "colors": colors_media}
 
 
 def main():

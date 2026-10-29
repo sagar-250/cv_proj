@@ -33,6 +33,12 @@ stopped before this was added (fitness/tilt/ambiguity are not in the log, so
 those columns are blank for such rows; the summary does not use them).
 Only resume with the same --clouds, --trials and registration code.
 
+Colour methods (src/color_registration.py, need clouds from p3_render.py
+--color material): `plan_color` (clutter filter + colour-aware ranking +
+coloured ICP polish), `plan_color_rank` (same without the coloured ICP), and
+`plan_color_wrongcat` (plan_color with a deliberately wrong material
+catalogue, WRONG_CATALOGUE: does a bad BIM material list break it?).
+
 Run: .venv/bin/python src/r3_registration_bench.py [--trials N] [--methods icp_old,fpfh,plan] [--tag _x] [--clouds DIR] [--resume] [--from-log FILE]
 Output: results/r3_registration_bench.csv, results/r3_registration_summary.md
 """
@@ -49,6 +55,8 @@ from scipy.spatial import cKDTree
 
 sys.path.insert(0, os.path.dirname(__file__))
 import registration  # noqa: E402
+import color_registration  # noqa: E402
+import materials  # noqa: E402
 from p2_p3_simulate_stages import survey_offset as random_offset  # noqa: E402
 
 SAMPLE_CACHE = "data/bim/bim_surface_samples.npz"
@@ -60,6 +68,14 @@ STAGES = ["00_m1_fundering_structure", "01_m1_fundering_envelope", "03_00_begane
           "15_04_dak_envelope"]
 SUCCESS_M = 0.05
 SEED = 0
+
+# plan_color_wrongcat: the catalogue colours of the most common materials are wrong
+WRONG_CATALOGUE = {**materials.CATALOGUE_RGB,
+                   "brick_brown": materials.CATALOGUE_RGB["brick_yellow"],
+                   "brick_yellow": materials.CATALOGUE_RGB["brick_brown"],
+                   "steel_primer": materials.CATALOGUE_RGB["steel_dark"],
+                   "wood": materials.CATALOGUE_RGB["board_white"],
+                   "concrete_cast": materials.CATALOGUE_RGB["brick_brown"]}
 
 # old method's constants, copied from p4_match_bim.py as it was before R3
 OLD_COARSE = 0.5
@@ -140,14 +156,26 @@ def main():
         tree = cKDTree(bim)
         icp_target = o3d.geometry.PointCloud()
         icp_target.points = o3d.utility.Vector3dVector(bim[rng.choice(bim.shape[0], 2_000_000, replace=False)])
-    if "fpfh" in methods or "plan" in methods:
+    color_methods = [m for m in methods if m.startswith("plan_color")]
+    if "fpfh" in methods or "plan" in methods or color_methods:
         t0 = time.time()
         target = registration.BimTarget(bim, seed=SEED, with_fpfh="fpfh" in methods)
         print(f"BIM target prepared in {time.time() - t0:.1f}s")
+    color_targets = {}
+    if color_methods:
+        gid = np.load(SAMPLE_CACHE)["gid"]
+        cats = materials.load_categories()
+        color_targets["right"] = color_registration.ColorTarget(bim, gid, cats, seed=SEED, geo=target)
+        if "plan_color_wrongcat" in methods:
+            color_targets["wrong"] = color_registration.ColorTarget(
+                bim, gid, cats, catalogue=WRONG_CATALOGUE, seed=SEED, geo=target)
 
     for stage in STAGES:
         d = np.load(os.path.join(args.clouds, f"{stage}.npz"))
         xyz0 = d["xyz"].astype(np.float64)
+        if color_methods:
+            assert str(d["rgb_source"]) == "camera", "colour methods need p3_render.py --color material clouds"
+            rgb = d["rgb"]
         T_true = d["gt_T_bim_to_cloud"]      # eval only
         center = xyz0.mean(axis=0)
         for regime in ["gnss", "local"]:
@@ -162,6 +190,11 @@ def main():
                     t0 = time.time()
                     if m == "icp_old":
                         T_est, info = icp_old(xyz, tree, icp_target), {}
+                    elif m in color_methods:
+                        T_est, info = color_registration.register(
+                            xyz, rgb, color_targets["wrong" if m == "plan_color_wrongcat" else "right"],
+                            with_scale=(regime == "gnss"), prior="gnss" if regime == "gnss" else "none",
+                            fine="none" if m == "plan_color_rank" else "colored_icp")
                     else:
                         T_est, info = registration.register(
                             xyz, target, method=m, with_scale=(regime == "gnss"), seed=k,
@@ -173,7 +206,11 @@ def main():
                                  "self_ok": info.get("ok", True), "fitness": info.get("fitness", np.nan),
                                  "tilt_deg": info.get("tilt_deg", np.nan),
                                  "ambiguity": info.get("ambiguity", np.nan),
-                                 "failed_checks": info.get("failed_checks", "")})
+                                 "failed_checks": info.get("failed_checks", ""),
+                                 "tight_fit": info.get("tight_fit", np.nan),
+                                 "color_fit": info.get("color_fit", np.nan),
+                                 "runner_color_fit": info.get("runner_color_fit", np.nan),
+                                 "tight_ambiguity": info.get("tight_ambiguity", np.nan)})
                     print(f"{stage[:24]:24s} {regime:5s} #{k:02d} {m:8s} err={err:8.3f} m  "
                           f"{'OK ' if err < SUCCESS_M else 'FAIL'} flagged={not info.get('ok', True)} "
                           f"{info.get('failed_checks', '')} ({secs:.1f}s)", flush=True)

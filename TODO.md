@@ -15,6 +15,7 @@ Order: R0 -> R2 -> R3 -> R1 -> R4 -> R5 -> R6 -> R7 (R1 can run alongside R2).
 
 ## R2. Realistic sensing
 - [ ] Render real-looking images (textures, light, shadows, blur) from the BIM
+  - [x] First step: camera colour per point (`p3_render.py --color material`, now the default). Material from the IFC (`src/materials.py` -> `data/bim/bim_materials.csv`, 16 categories), rendered with its own colour table, per-element tint, brick/block courses, sun + shadows, exposure, dirt, 6% of elements built from another material. Still a coloured raycast, not photos
 - [ ] Realistic drone flight paths with pose noise and coverage gaps
 - [ ] Build the cloud from the images with COLMAP/OpenMVS (SfM)
 - [x] Add a LiDAR-style sensor with range-dependent noise (`p3_render.py --sensor realistic`: range/angle noise, grazing dropout, holes, edge ghosts, floaters). Not yet run through the pipeline
@@ -31,6 +32,12 @@ Order: R0 -> R2 -> R3 -> R1 -> R4 -> R5 -> R6 -> R7 (R1 can run alongside R2).
     (runs only the 50 missing trials, ~1.5 h; don't change `registration.py` before then or the two halves won't match)
   - So far: 68/70 right; 1 wrong but flagged (stage 01 indoor, 3.6 m); 1 silent near-miss (stage 07 GPS #3, 6.8 cm)
 - [x] Wired into `p4_match_bim.py` (`--registration plan`, default) with the result saved in `registration.json`
+- [ ] Use colour in registration (`src/color_registration.py`, `--registration plan_color`): clutter filter by colour, finalists ranked by tight fit x colour agreement with the BIM material, coloured ICP polish
+  - [ ] Bench on busy + realistic clouds: `plan` vs `plan_color_rank` vs `plan_color_wrongcat` (wrong material catalogue), 1 offset per case (`--clouds data/pointclouds_color --tag _color`), log in `results/experiments/r3_bench_color.log`
+    - First try stopped: with the wrong catalogue colour overruled geometry (stage 00, 3.3 m off, not flagged). Colour now only breaks near-ties; rerunning
+  - [x] Pictures: `media/10_materials_color/` (`make_media.py --only colors`)
+  - [ ] Add `plan_color` (with coloured ICP, ~100 s slower) to the same bench with `--resume`
+  - [ ] Full pipeline (P4 -> P7) with `plan_color` vs `plan` on the colour clouds
 - Done when: >=95% success over those 100 offsets, and 0 wrong results that were not flagged
 
 ## R1. Realistic world
