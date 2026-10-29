@@ -11,7 +11,14 @@ This replaces the old flat-fraction p2_p3_simulate_stages.py: stages now
 come from real milestone/manifest ground truth, not an arbitrary cumulative
 percentage.
 
-Run: .venv/bin/python src/p3_render.py [--sensor simple|realistic] [--georef small|gnss|local]
+--site busy (R1, src/site_clutter.py) adds what a real site has around and in
+the building -- scaffolding, tower crane, fence, shoring props, material
+piles, workers -- and builds 4% of elements a few cm off their designed
+position. Clutter is raycast like the building (it occludes and gets sensor
+noise), labelled in gt_class; the deviated ids are saved as eval-only
+gt_deviated_ids.
+
+Run: .venv/bin/python src/p3_render.py [--sensor simple|realistic] [--georef small|gnss|local] [--site clean|busy]
 Output: data/pointclouds/{stage}.npz, results/pointcloud_viewer_data.js (BIM group).
 """
 import argparse
@@ -26,6 +33,7 @@ import ifcopenshell.geom
 
 sys.path.insert(0, os.path.dirname(__file__))
 import p2_p3_simulate_stages as sim  # noqa: E402
+import site_clutter  # noqa: E402
 from p2_p3_simulate_stages import (  # noqa: E402
     jitter_element, clip_partial_height, make_o3d_scene,
     exterior_viewpoints, interior_viewpoints, raycast, make_ground, make_trees,
@@ -41,6 +49,7 @@ TARGET_POINTS_OUT = 55_000
 sim.TARGET_POINTS_OUT = TARGET_POINTS_OUT  # pack_entry reads this from its own module globals
 SEED = 0
 SENSOR = "simple"   # set from --sensor in main()
+SITE = "clean"      # set from --site in main()
 GEOREF = "small"    # set from --georef in main(): "small" = only the 8 cm / 1.2 deg REG_JITTER,
                     # "gnss" / "local" = add a survey-sized offset (see survey_offset)
 
@@ -51,7 +60,7 @@ RS_SIGMA_PER_M = 0.0008    # m of depth noise per m of range (drone at 30 m -> ~
 RS_MIN_COS = 0.2           # grazing-angle noise blow-up is capped here
 RS_BASE_DROP = 0.10
 RS_GRAZING_COS = 0.3       # below this |cos(incidence)|, dropout ramps to 100%
-RS_HOLE_EVERY = 20_000     # one texture-less hole per this many points
+RS_HOLE_AREA = 60.0        # m^2 of scanned surface per texture-less hole
 RS_HOLE_RADIUS = (0.3, 1.5)
 RS_MIXED_FRAC = 0.01       # edge "mixed pixel" ghosts pushed behind the surface
 RS_FLOATER_FRAC = 0.003    # random floaters in the bounding box
@@ -68,8 +77,13 @@ def realistic_sensor(pts, rng_m, cos_inc, dirs, rng):
     p_drop = RS_BASE_DROP + (1 - RS_BASE_DROP) * np.clip((RS_GRAZING_COS - cos_inc) / RS_GRAZING_COS, 0, 1)
     keep = rng.random(n) > p_drop
 
-    n_holes = max(1, n // RS_HOLE_EVERY)
-    centres = pts[rng.choice(n, n_holes, replace=False)]
+    # holes per unit of SURFACE, centred uniformly over it. (An earlier
+    # version used one hole per 20k raw rays, centred on random rays: with
+    # millions of rays that was hundreds of holes, piled up where rays are
+    # densest -- around the indoor scanners -- and it wiped out whole rooms.)
+    vox = np.unique(np.floor(pts / 0.5).astype(np.int64), axis=0)
+    n_holes = max(1, int(len(vox) * 0.25 / RS_HOLE_AREA))
+    centres = (vox[rng.choice(len(vox), n_holes, replace=False)] + 0.5) * 0.5
     radii = rng.uniform(*RS_HOLE_RADIUS, n_holes)
     from scipy.spatial import cKDTree
     tree = cKDTree(pts)
@@ -116,14 +130,19 @@ def stage_elements_from_manifest(manifest, all_elements, rng):
     return [jitter_element(e, rng, ELEMENT_JITTER_T, ELEMENT_JITTER_DEG) for e in out]
 
 
-def run_stage(stage_elements, rng, ground_trees):
-    scene, tri_class, tri_gid, verts = make_o3d_scene(stage_elements)
+def run_stage(stage_elements, rng, ground_trees, clutter=None):
+    # camera plan from the building alone, so clutter doesn't move the cameras
+    verts = np.concatenate([e["verts"] for e in stage_elements], axis=0).astype(np.float32)
     center = verts.mean(axis=0)
     footprint_radius = float(np.linalg.norm(verts[:, :2] - center[:2], axis=1).max())
     height_range = (float(verts[:, 2].min()), float(verts[:, 2].max()))
 
     viewpoints = exterior_viewpoints(center, footprint_radius, height_range)
     viewpoints += interior_viewpoints(stage_elements, center, footprint_radius)
+    if clutter:
+        eyes = np.array([eye for kind, eye in viewpoints if kind != "pinhole"]).reshape(-1, 3)
+        clutter = site_clutter.drop_blocking(clutter, eyes)
+    scene, tri_class, tri_gid, _ = make_o3d_scene(stage_elements + (clutter or []))
     if SENSOR == "realistic":
         pts, classes, gids, rng_m, cos_inc, dirs = raycast(
             scene, tri_class, tri_gid, viewpoints, center, rng, return_geometry=True)
@@ -170,7 +189,7 @@ def run_stage(stage_elements, rng, ground_trees):
 
 
 def save_stage_pointcloud(stage_name, xyz, rgb, gt_class, gt_global_id, T_true, cam_eyes, cam_kinds,
-                          cam_target, out_dir="data/pointclouds"):
+                          cam_target, out_dir="data/pointclouds", deviated_ids=()):
     """Plain float32 xyz in the original BIM world frame (same frame as
     bim_complete.csv), NOT the viewer's centered/axis-swapped/quantized one --
     this is what a segmentation script should load. gt_class/gt_global_id and
@@ -190,6 +209,7 @@ def save_stage_pointcloud(stage_name, xyz, rgb, gt_class, gt_global_id, T_true, 
         cam_eyes=cam_eyes,
         cam_kinds=cam_kinds,
         cam_target=cam_target,
+        gt_deviated_ids=np.asarray(sorted(deviated_ids), dtype="<U24"),
     )
 
 
@@ -202,13 +222,15 @@ def storey_short(storey):
 
 
 def main():
-    global SENSOR, GEOREF
+    global SENSOR, GEOREF, SITE
     ap = argparse.ArgumentParser()
     ap.add_argument("--sensor", choices=["simple", "realistic"], default="simple")
     ap.add_argument("--georef", choices=["small", "gnss", "local"], default="small")
+    ap.add_argument("--site", choices=["clean", "busy"], default="clean")
     args = ap.parse_args()
-    SENSOR, GEOREF = args.sensor, args.georef
-    print(f"Sensor model: {SENSOR}, georeference: {GEOREF}")
+    SENSOR, GEOREF, SITE = args.sensor, args.georef, args.site
+    print(f"Sensor model: {SENSOR}, georeference: {GEOREF}, site: {SITE}")
+    CLASS_COLOR.update(site_clutter.CLUTTER_COLOR)
     f = ifcopenshell.open(IFC_PATH)
     settings = ifcopenshell.geom.settings()
     settings.set(settings.USE_WORLD_COORDS, True)
@@ -226,6 +248,12 @@ def main():
                     *make_trees(full_center, full_radius, base_z, clutter_rng))
     ground_trees = (ground_trees[0], ground_trees[1], ground_trees[2], ground_trees[3])
 
+    site, dev = None, {}
+    if SITE == "busy":
+        site = site_clutter.Site(all_elements)
+        dev = site_clutter.deviations(all_elements.keys())
+        print(f"Busy site: {len(dev)} elements built off their designed position")
+
     stage_dirs = sorted(glob.glob(os.path.join(STATES_DIR, "*")))
     entries = []
     for stage_dir in stage_dirs:
@@ -235,17 +263,23 @@ def main():
         rng = np.random.default_rng(SEED + 1000 + i)
 
         stage_elements = stage_elements_from_manifest(manifest, all_elements, rng)
+        clutter, deviated = None, ()
+        if site is not None:
+            stage_elements = site_clutter.apply_deviations(stage_elements, dev)
+            deviated = [e["global_id"] for e in stage_elements if e["global_id"] in dev]
+            clutter = site_clutter.stage_clutter(site, stage_elements, i, manifest["phase"],
+                                                 is_last=stage_dir == stage_dirs[-1])
         print(f"\nStage {i:02d} [{manifest['storey_milestone']} / {manifest['phase']}]: "
               f"{len(stage_elements)} elements ({manifest['n_fully_built']} full, "
               f"{manifest['n_partial']} partial), raycasting...")
 
         (all_pts, all_col, all_gt_class, all_gt_gid, n_structure, center, fr,
-         T_true, cam_eyes, cam_kinds, cam_target) = run_stage(stage_elements, rng, ground_trees)
+         T_true, cam_eyes, cam_kinds, cam_target) = run_stage(stage_elements, rng, ground_trees, clutter)
         n_full = all_pts.shape[0]
 
         stage_name = os.path.basename(stage_dir)
         save_stage_pointcloud(stage_name, all_pts, all_col, all_gt_class, all_gt_gid,
-                              T_true, cam_eyes, cam_kinds, cam_target)
+                              T_true, cam_eyes, cam_kinds, cam_target, deviated_ids=deviated)
 
         label = f"BIM: {i:02d} {storey_short(manifest['storey_milestone'])} - {manifest['phase']}"
         entry = pack_entry(label, all_pts, all_col, n_full, center, fr * 1.15)

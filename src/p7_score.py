@@ -32,12 +32,19 @@ not_started only if, given this stage's cameras and the elements we did
 detect, it would have produced at least VISIBLE_MIN_EXPECTED points had it
 been built. `--mask final` keeps the old behaviour for comparison.
 
+In the same mode, a detected element is thrown out ("too few points") if it
+got fewer than DETECT_MIN_FRACTION of the points p4_visibility.py says it
+would give if built and visible (visibility_detected.json); it is then
+treated like any undetected element. This removes "detections" made of a
+few stray points from a neighbouring surface, which a noisy sensor produces
+inside the volume of unbuilt walls. `--min-fraction 0` turns it off.
+
 Progress = sum(w_i * C_i) / sum(w_i) * 100, over non-uncertain elements,
 computed with two weightings (count, volume) per SPEC. Ground truth progress
 comes directly from each stage's manifest.json (which we have, since this is
 simulated data -- a real deployment wouldn't have this for comparison).
 
-Run: .venv/bin/python src/p7_score.py [--mask visibility|final]
+Run: .venv/bin/python src/p7_score.py [--mask visibility|final] [--min-fraction F]
 Output: data/status/{stage}/status.csv (per-element), results/main_table.csv
 (per-stage progress estimate vs ground truth), results/figures/p7_progress_error.png
 """
@@ -63,15 +70,27 @@ OUT_FIG = "results/figures/p7_progress_error.png"
 COMPLETED_THRESHOLD = 0.5
 PARTIAL_THRESHOLD = 0.15
 VISIBLE_MIN_EXPECTED = 30   # expected points (if built) needed to call an unseen element not_started
+DETECT_MIN_FRACTION = 0.1   # a detection needs at least this share of its expected points (set by --min-fraction)
 
 
 def score_stage(stage_name, bim_df, well_covered_ids):
     manifest = json.load(open(os.path.join(STATES_DIR, stage_name, "manifest.json"), encoding="utf-8"))
     matches = json.load(open(os.path.join(MATCHES_DIR, stage_name, "matches.json"), encoding="utf-8"))
     match_by_gid = {m["global_id"]: m for m in matches}
+    n_rejected = 0
     if well_covered_ids is None:  # per-stage visibility mask
         vis = json.load(open(os.path.join(MATCHES_DIR, stage_name, "visibility.json"), encoding="utf-8"))
         well_covered_ids = {g for g, n in vis.items() if n >= VISIBLE_MIN_EXPECTED}
+        det_path = os.path.join(MATCHES_DIR, stage_name, "visibility_detected.json")
+        if DETECT_MIN_FRACTION > 0 and os.path.exists(det_path):
+            exp_det = json.load(open(det_path, encoding="utf-8"))
+            for g, m in list(match_by_gid.items()):
+                e = exp_det.get(g, 0.0)
+                if m["point_count"] < DETECT_MIN_FRACTION * e:
+                    del match_by_gid[g]   # too few points: treat as not detected
+                    n_rejected += 1
+                    if e >= VISIBLE_MIN_EXPECTED:
+                        well_covered_ids = well_covered_ids | {g}
 
     rows = []
     for _, elem in bim_df.iterrows():
@@ -150,14 +169,18 @@ def score_stage(stage_name, bim_df, well_covered_ids):
         "signed_error_count": progress_count - gt_progress_count,
         "registration_ok": reg_ok,
         "registration_err_m": reg_err,
+        "n_rejected_few_points": n_rejected,
         **diag,
     }
 
 
 def main():
+    global DETECT_MIN_FRACTION
     ap = argparse.ArgumentParser()
     ap.add_argument("--mask", choices=["visibility", "final"], default="visibility")
+    ap.add_argument("--min-fraction", type=float, default=DETECT_MIN_FRACTION)
     args = ap.parse_args()
+    DETECT_MIN_FRACTION = args.min_fraction
     bim_df = pd.read_csv(BIM_CSV)
     stage_names = sorted(
         os.path.basename(p) for p in glob.glob(os.path.join(STATES_DIR, "*")) if os.path.isdir(p)

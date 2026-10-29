@@ -36,7 +36,10 @@ Order: R0 -> R2 -> R3 -> R1 -> R4 -> R5 -> R6 -> R7 (R1 can run alongside R2).
 ## R1. Realistic world
 - [ ] Activity states: formwork, rebar, concrete, finished
 - [ ] As-built deviations (elements slightly off, a few wrong or missing)
-- [ ] Clutter: scaffolding, cranes, material piles, workers, fences
+  - [x] 4% of elements built 4-12 cm off design, same ones every stage (`--site busy`)
+  - [ ] A few elements missing or built in a clearly wrong place
+- [x] Clutter: scaffolding, crane, fence, shoring props, material piles, workers (`src/site_clutter.py`, `p3_render.py --site busy`)
+- [ ] Run the pipeline on the busy site and fix what breaks
 - [ ] Manifests store the new ground truth
 - Done when: a viewer shows a stage with clutter and deviations
 

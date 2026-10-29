@@ -30,10 +30,19 @@ true offset:
   4. Scale by the sensor dropout rate. If that expected count is high
      enough, absence of points is real evidence -> not built. Otherwise
      -> unknown (excluded from progress).
+  5. The same count for every element we DID detect: rays whose first hit
+     among the detected elements is that element (assignable, scaled by
+     dropout). p7_score.py uses it to throw out "detections" that got only
+     a small fraction of the points a really built, clearly visible
+     element would give -- with a noisy sensor, stray points from a
+     neighbouring slab land inside an unbuilt wall's volume and pass the
+     distance test (measured with --sensor realistic: 25 unbuilt elements
+     "detected" at stage 05 from 8-40 slab points each).
 
 Run: .venv/bin/python src/p4_visibility.py [--stage NAME]
      (after p3_render.py and p4_match_bim.py)
-Output: data/matches/{stage}/visibility.json  {global_id: expected_points}
+Output: data/matches/{stage}/visibility.json           {undetected global_id: expected_points}
+        data/matches/{stage}/visibility_detected.json  {detected global_id: expected_points}
 """
 import argparse
 import glob
@@ -138,8 +147,17 @@ def expected_points(stage, verts, faces, tri_gid, tree, tree_gid):
     eyes = d["cam_eyes"] @ T[:3, :3].T + T[:3, 3]
     target = T[:3, :3] @ d["cam_target"] + T[:3, 3]
     rays = camera_rays(eyes, d["cam_kinds"], target, np.random.default_rng(SEED))
-    occ_scene, _ = scene_from(verts, faces, is_det)
-    t_occ = occ_scene.cast_rays(o3d.core.Tensor(rays))["t_hit"].numpy()
+    occ_scene, occ_tri = scene_from(verts, faces, is_det)
+    occ_hit = occ_scene.cast_rays(o3d.core.Tensor(rays))
+    t_occ = occ_hit["t_hit"].numpy()
+
+    hit = np.isfinite(t_occ)
+    det_gid = tri_gid[occ_tri[occ_hit["primitive_ids"].numpy()[hit]]]
+    det_ok = assignable(rays[hit, :3] + t_occ[hit, None] * rays[hit, 3:], det_gid, tree, tree_gid)
+    g_det, n_det = np.unique(det_gid[det_ok], return_counts=True)
+    det_counts = {g: float(c) * (1 - sim.DROPOUT_FRAC) for g, c in zip(g_det, n_det)}
+    for g in detected:
+        det_counts.setdefault(g, 0.0)
 
     cand_scene, cand_tri = scene_from(verts, faces, ~is_det)
     counts = {}
@@ -165,7 +183,7 @@ def expected_points(stage, verts, faces, tri_gid, tree, tree_gid):
         counts = {g: float(c) * (1 - sim.DROPOUT_FRAC) for g, c in zip(uniq_g, per)}
     for g in np.unique(tri_gid[~is_det]):
         counts.setdefault(g, 0.0)
-    return counts, len(detected)
+    return counts, det_counts
 
 
 def main():
@@ -177,11 +195,13 @@ def main():
     stages = [args.stage] if args.stage else sorted(
         os.path.splitext(os.path.basename(p))[0] for p in glob.glob(os.path.join(POINTCLOUD_DIR, "*.npz")))
     for stage in stages:
-        counts, n_det = expected_points(stage, verts, faces, tri_gid, tree, tree_gid)
+        counts, det_counts = expected_points(stage, verts, faces, tri_gid, tree, tree_gid)
         with open(os.path.join(MATCHES_DIR, stage, "visibility.json"), "w", encoding="utf-8") as f:
             json.dump(counts, f)
+        with open(os.path.join(MATCHES_DIR, stage, "visibility_detected.json"), "w", encoding="utf-8") as f:
+            json.dump(det_counts, f)
         vals = np.array(list(counts.values()))
-        print(f"{stage}: {n_det} detected; {len(vals)} undetected, of which "
+        print(f"{stage}: {len(det_counts)} detected; {len(vals)} undetected, of which "
               f"{int((vals >= 30).sum())} would have had >=30 points if built")
 
 

@@ -91,6 +91,12 @@ Images are PNG, animations are GIF (they play in any browser or image viewer), a
 - **Desktop apps:** MeshLab or CloudCompare (both free). These can also show several files together, for example a scan plus a truth model.
 - **Windows:** 3D Viewer opens PLY files directly.
 
+## 09. Busy construction site (R1, new)
+
+| File | What it shows |
+|---|---|
+| [busy_site_world.png](09_busy_site/busy_site_world.png) | The busier site the scanner can now see (`p3_render.py --site busy`). It adds scaffolding along the walls, a tower crane, a site fence, shoring poles under the newest floor, material piles and workers. A few elements (pink) are built 4–12 cm away from where the design says. None of this is in the BIM, so the pipeline has to cope with it. |
+
 ## Other viewers already in the project
 
 - `src/pointcloud_viewer.html`: an interactive point-cloud viewer in the browser for all stages. It reads `results/pointcloud_viewer_data.js`.

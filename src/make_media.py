@@ -15,8 +15,8 @@ seeded, so reruns give identical files. Needs the outputs of P2-P7 and
 data/bim/bim_meshes.npz (made by p4_visibility.py); does not rerun any phase,
 except that the "sensor" section re-simulates one stage in memory.
 
-Run: .venv/bin/python src/make_media.py [--only charts,truth,scans,sensor,clip,registration,visibility,errors,models,flow]
-Output: media/ (folders 00_overview ... 08_3d_models)
+Run: .venv/bin/python src/make_media.py [--only charts,truth,scans,sensor,clip,registration,visibility,errors,models,flow,site]
+Output: media/ (folders 00_overview ... 09_busy_site)
 """
 import argparse
 import glob
@@ -817,6 +817,63 @@ def errors():
     print("errors done")
 
 
+# ------------------------------------------------------------------ 09 busy site (R1)
+
+def busy_site():
+    import site_clutter as sc
+    d = out_dir("09_busy_site")
+    bim = Bim()
+    all_el = {}
+    for i, g in enumerate(bim.gids):
+        idx, local = np.unique(bim.faces[bim.tri_elem == i], return_inverse=True)
+        v = bim.verts[idx]
+        all_el[g] = {"global_id": g, "ifc_type": bim.type[i], "verts": v, "faces": local.reshape(-1, 3),
+                     "z_min": float(v[:, 2].min()), "z_max": float(v[:, 2].max())}
+    site = sc.Site(all_el)
+    dev = sc.deviations(all_el.keys())
+    ims, titles = [], []
+    for s in ["05_01_eerste_verdieping_structure", "10_02_tweede_verdieping_interior"]:
+        m = manifest(s)
+        t = truth_of(s)
+        partial = {g: f for g, f in t.items() if f < 1}
+        vv = bim.clamped_verts(partial)
+        els = []
+        for g in t:
+            if g in all_el:
+                e = dict(all_el[g])
+                idx = np.unique(bim.faces[bim.tri_elem == bim.gid_index[g]])
+                e["verts"] = vv[idx]
+                els.append(e)
+        els = sc.apply_deviations(els, dev)
+        clutter = sc.stage_clutter(site, els, m["stage_index"], m["phase"], is_last=False)
+        vs, fs, cs, off = [], [], [], 0
+        for e in els + clutter:
+            vs.append(e["verts"])
+            fs.append(e["faces"] + off)
+            off += len(e["verts"])
+            if e["global_id"] in dev:
+                c = (0.85, 0.1, 0.6)
+            elif e["global_id"]:
+                c = PARTIAL if e["global_id"] in partial else BUILT
+            else:
+                c = np.array(sc.CLUTTER_COLOR[e["ifc_type"]]) / 255
+            cs.append(np.tile(c, (len(e["faces"]), 1)))
+        V, F, C = np.concatenate(vs), np.concatenate(fs), np.concatenate(cs)
+        ims.append(render(V, F, C, *view(bim, dist=3.0, el=30), 800, 560))
+        titles.append(f"Stage {short(s)}")
+        c0 = bim.center.copy()
+        c0[2] = 3.0
+        ims.append(render(V, F, C, *view(bim, az=-70, el=20, dist=0.9, center=c0), 800, 560))
+        titles.append(f"Stage {short(s)}, close-up")
+    legend = [(k, np.array(c) / 255) for k, c in sc.CLUTTER_COLOR.items()] + \
+        [("built", BUILT), ("half built", PARTIAL), ("built 4-12 cm off design", (0.85, 0.1, 0.6))]
+    fig = panels(ims, titles, "Busy site (p3_render.py --site busy): things a real site has that the BIM "
+                 "does not, and a few elements built slightly off", legend, ncols=2, scale=0.9)
+    fig.savefig(os.path.join(d, "busy_site_world.png"), dpi=100)
+    plt.close(fig)
+    print("busy site done")
+
+
 # ------------------------------------------------------------------ 08 3D files
 
 def write_ply(path, xyz, rgb, faces=None):
@@ -914,7 +971,8 @@ def flow():
 
 
 SECTIONS = {"flow": flow, "charts": charts, "truth": truth, "scans": scans, "sensor": sensor, "clip": clip,
-            "registration": registration_media, "visibility": visibility, "errors": errors, "models": models}
+            "registration": registration_media, "visibility": visibility, "errors": errors, "models": models,
+            "site": busy_site}
 
 
 def main():
