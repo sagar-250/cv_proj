@@ -1,0 +1,16 @@
+00_m1_fundering_structure: 84 detected; 1271 undetected, of which 1234 would have had >=30 points if built
+01_m1_fundering_envelope: 119 detected; 1236 undetected, of which 1187 would have had >=30 points if built
+02_00_begane_grond_structure: 131 detected; 1224 undetected, of which 1117 would have had >=30 points if built
+03_00_begane_grond_envelope: 304 detected; 1051 undetected, of which 878 would have had >=30 points if built
+04_00_begane_grond_interior: 351 detected; 1004 undetected, of which 793 would have had >=30 points if built
+05_01_eerste_verdieping_structure: 422 detected; 933 undetected, of which 710 would have had >=30 points if built
+06_01_eerste_verdieping_envelope: 584 detected; 771 undetected, of which 535 would have had >=30 points if built
+07_01_eerste_verdieping_interior: 625 detected; 730 undetected, of which 462 would have had >=30 points if built
+08_02_tweede_verdieping_structure: 676 detected; 679 undetected, of which 401 would have had >=30 points if built
+09_02_tweede_verdieping_envelope: 781 detected; 574 undetected, of which 289 would have had >=30 points if built
+10_02_tweede_verdieping_interior: 808 detected; 547 undetected, of which 237 would have had >=30 points if built
+11_03_derde_verdieping_structure: 895 detected; 460 undetected, of which 121 would have had >=30 points if built
+12_03_derde_verdieping_envelope: 925 detected; 430 undetected, of which 100 would have had >=30 points if built
+13_03_derde_verdieping_interior: 958 detected; 397 undetected, of which 46 would have had >=30 points if built
+14_04_dak_structure: 981 detected; 374 undetected, of which 28 would have had >=30 points if built
+15_04_dak_envelope: 974 detected; 381 undetected, of which 23 would have had >=30 points if built

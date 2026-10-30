@@ -1,0 +1,86 @@
+Extracting complete BIM geometry and sampling surfaces...
+  cached to data/bim/bim_surface_samples.npz
+  1355 elements, 12934946 surface samples
+Sample tree memory: xyz 155.2MB, gid 1241.8MB
+
+00_m1_fundering_structure:
+  ICP: fitness=0.997, inlier_rmse=0.0521 (from 35781 coarse-filtered points)
+  assigned 24969/47420 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  84 elements detected (>= 8 points each)
+
+01_m1_fundering_envelope:
+  ICP: fitness=1.000, inlier_rmse=0.0537 (from 36238 coarse-filtered points)
+  assigned 27559/47970 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  119 elements detected (>= 8 points each)
+
+02_00_begane_grond_structure:
+  ICP: fitness=0.999, inlier_rmse=0.0498 (from 79338 coarse-filtered points)
+  assigned 26942/90983 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  131 elements detected (>= 8 points each)
+
+03_00_begane_grond_envelope:
+  ICP: fitness=0.999, inlier_rmse=0.0503 (from 115476 coarse-filtered points)
+  assigned 87300/127099 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  304 elements detected (>= 8 points each)
+
+04_00_begane_grond_interior:
+  ICP: fitness=0.999, inlier_rmse=0.0513 (from 127520 coarse-filtered points)
+  assigned 91353/139197 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  351 elements detected (>= 8 points each)
+
+05_01_eerste_verdieping_structure:
+  ICP: fitness=0.999, inlier_rmse=0.0493 (from 202065 coarse-filtered points)
+  assigned 127457/213686 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  422 elements detected (>= 8 points each)
+
+06_01_eerste_verdieping_envelope:
+  ICP: fitness=0.999, inlier_rmse=0.0508 (from 238199 coarse-filtered points)
+  assigned 182100/249648 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  584 elements detected (>= 8 points each)
+
+07_01_eerste_verdieping_interior:
+  ICP: fitness=1.000, inlier_rmse=0.0518 (from 253737 coarse-filtered points)
+  assigned 191332/265386 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  625 elements detected (>= 8 points each)
+
+08_02_tweede_verdieping_structure:
+  ICP: fitness=1.000, inlier_rmse=0.0527 (from 279396 coarse-filtered points)
+  assigned 222330/291072 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  676 elements detected (>= 8 points each)
+
+09_02_tweede_verdieping_envelope:
+  ICP: fitness=1.000, inlier_rmse=0.0515 (from 308018 coarse-filtered points)
+  assigned 245966/319638 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  781 elements detected (>= 8 points each)
+
+10_02_tweede_verdieping_interior:
+  ICP: fitness=1.000, inlier_rmse=0.0511 (from 321377 coarse-filtered points)
+  assigned 257482/333103 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  808 elements detected (>= 8 points each)
+
+11_03_derde_verdieping_structure:
+  ICP: fitness=1.000, inlier_rmse=0.0493 (from 456752 coarse-filtered points)
+  assigned 384010/468344 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  895 elements detected (>= 8 points each)
+
+12_03_derde_verdieping_envelope:
+  ICP: fitness=1.000, inlier_rmse=0.0505 (from 455300 coarse-filtered points)
+  assigned 392315/466974 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  925 elements detected (>= 8 points each)
+
+13_03_derde_verdieping_interior:
+  ICP: fitness=1.000, inlier_rmse=0.0511 (from 461661 coarse-filtered points)
+  assigned 391415/473319 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  958 elements detected (>= 8 points each)
+
+14_04_dak_structure:
+  ICP: fitness=1.000, inlier_rmse=0.0511 (from 473585 coarse-filtered points)
+  assigned 407985/485219 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  981 elements detected (>= 8 points each)
+
+15_04_dak_envelope:
+  ICP: fitness=1.000, inlier_rmse=0.0505 (from 474300 coarse-filtered points)
+  assigned 401100/485855 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  974 elements detected (>= 8 points each)
+
+Wrote matches for 16 stage(s) under data/matches/

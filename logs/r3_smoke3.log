@@ -1,0 +1,32 @@
+BIM target prepared in 11.1s
+00_m1_fundering_structur gnss  #00 plan     err=   1.251 m  FAIL flagged=False  (5.6s)
+00_m1_fundering_structur local #00 plan     err=   1.355 m  FAIL flagged=False  (7.6s)
+03_00_begane_grond_envel gnss  #00 plan     err=   0.793 m  FAIL flagged=True unambiguous (7.9s)
+03_00_begane_grond_envel local #00 plan     err=   1.279 m  FAIL flagged=False  (8.9s)
+07_01_eerste_verdieping_ gnss  #00 plan     err=   0.031 m  OK  flagged=True unambiguous (8.6s)
+07_01_eerste_verdieping_ local #00 plan     err=   0.017 m  OK  flagged=True unambiguous (13.6s)
+11_03_derde_verdieping_s gnss  #00 plan     err=   0.006 m  OK  flagged=True unambiguous (7.7s)
+11_03_derde_verdieping_s local #00 plan     err=   0.004 m  OK  flagged=True unambiguous (19.6s)
+15_04_dak_envelope       gnss  #00 plan     err=   0.005 m  OK  flagged=True unambiguous (7.9s)
+15_04_dak_envelope       local #00 plan     err=   0.006 m  OK  flagged=True unambiguous (17.7s)
+
+# R3 registration benchmark
+
+Success = mean BIM-point displacement < 0.05 m. 1 offsets per stage per regime, 5 stages.
+
+silent_fails = wrong AND not flagged (must be 0); flagged_fails = wrong but the method said so; false_alarms = right but flagged.
+
+| method   | regime   |   trials |   success_rate |   silent_fails |   flagged_fails |   false_alarms |   median_err_m |   mean_secs |
+|:---------|:---------|---------:|---------------:|---------------:|----------------:|---------------:|---------------:|------------:|
+| plan     | gnss     |        5 |          0.600 |              1 |               1 |              3 |          0.031 |       7.558 |
+| plan     | local    |        5 |          0.600 |              2 |               0 |              3 |          0.017 |      13.478 |
+
+## Success rate by stage
+
+| stage                            |   plan |
+|:---------------------------------|-------:|
+| 00_m1_fundering_structure        |   0.00 |
+| 03_00_begane_grond_envelope      |   0.00 |
+| 07_01_eerste_verdieping_interior |   1.00 |
+| 11_03_derde_verdieping_structure |   1.00 |
+| 15_04_dak_envelope               |   1.00 |

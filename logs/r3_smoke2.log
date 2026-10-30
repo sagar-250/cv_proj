@@ -1,0 +1,36 @@
+BIM target prepared in 10.9s
+[1;33m[Open3D WARNING] Too few correspondences (1225) after mutual filter, fall back to original correspondences.[0;m
+[1;33m[Open3D WARNING] Too few correspondences (1225) after mutual filter, fall back to original correspondences.[0;m
+00_m1_fundering_structur gnss  #00 robust   err=   1.794 m  FAIL (18.8s)
+[1;33m[Open3D WARNING] Too few correspondences (1209) after mutual filter, fall back to original correspondences.[0;m
+[1;33m[Open3D WARNING] Too few correspondences (1209) after mutual filter, fall back to original correspondences.[0;m
+00_m1_fundering_structur local #00 robust   err=  11.976 m  FAIL (10.3s)
+03_00_begane_grond_envel gnss  #00 robust   err=   6.000 m  FAIL (24.8s)
+03_00_begane_grond_envel local #00 robust   err=  25.620 m  FAIL (10.3s)
+07_01_eerste_verdieping_ gnss  #00 robust   err=   2.416 m  FAIL (35.9s)
+07_01_eerste_verdieping_ local #00 robust   err=  24.254 m  FAIL (23.6s)
+11_03_derde_verdieping_s gnss  #00 robust   err=   0.006 m  OK  (44.8s)
+11_03_derde_verdieping_s local #00 robust   err=   0.004 m  OK  (31.0s)
+15_04_dak_envelope       gnss  #00 robust   err=   0.005 m  OK  (44.4s)
+15_04_dak_envelope       local #00 robust   err=   0.006 m  OK  (34.8s)
+
+# R3 registration benchmark
+
+Success = mean BIM-point displacement < 0.05 m. 1 offsets per stage per regime, 5 stages.
+
+| method   | regime   |   trials |   success_rate |   median_err_m |   mean_secs |
+|:---------|:---------|---------:|---------------:|---------------:|------------:|
+| robust   | gnss     |        5 |          0.400 |          1.794 |      33.753 |
+| robust   | local    |        5 |          0.400 |         11.976 |      21.999 |
+
+## Success rate by stage
+
+| stage                            |   robust |
+|:---------------------------------|---------:|
+| 00_m1_fundering_structure        |     0.00 |
+| 03_00_begane_grond_envelope      |     0.00 |
+| 07_01_eerste_verdieping_interior |     0.00 |
+| 11_03_derde_verdieping_structure |     1.00 |
+| 15_04_dak_envelope               |     1.00 |
+
+Robust-method failures it flagged itself: 3; silent failures: 3.

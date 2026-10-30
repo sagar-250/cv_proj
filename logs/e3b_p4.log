@@ -1,0 +1,85 @@
+Loading cached BIM surface samples from data/bim/bim_surface_samples.npz...
+  1355 elements, 12934946 surface samples
+Sample tree memory: xyz 155.2MB, gid 1241.8MB
+
+00_m1_fundering_structure:
+  registration: coarse_score=0.4319, tight_fit=0.4926, ambiguity=0.5325, fitness=0.7228, rmse=0.0463, tilt_deg=0.7615, scale=0.9988, shift_m=1.3404, failed_checks=, ok=True
+  assigned 24969/47420 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  84 elements detected (>= 8 points each)
+
+01_m1_fundering_envelope:
+  registration: coarse_score=0.4293, tight_fit=0.4706, ambiguity=0.5942, fitness=0.7262, rmse=0.0478, tilt_deg=0.8201, scale=1.0022, shift_m=2.3680, failed_checks=, ok=True
+  assigned 27497/47970 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  119 elements detected (>= 8 points each)
+
+02_00_begane_grond_structure:
+  registration: coarse_score=0.5528, tight_fit=0.5654, ambiguity=0.8604, fitness=0.8042, rmse=0.0451, tilt_deg=0.5484, scale=1.0003, shift_m=3.0118, failed_checks=, ok=True
+  assigned 43682/90983 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  129 elements detected (>= 8 points each)
+
+03_00_begane_grond_envelope:
+  registration: coarse_score=0.5138, tight_fit=0.5772, ambiguity=0.7355, fitness=0.8685, rmse=0.0469, tilt_deg=0.3445, scale=0.9927, shift_m=3.8645, failed_checks=, ok=True
+  assigned 86969/127099 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  304 elements detected (>= 8 points each)
+
+04_00_begane_grond_interior:
+  registration: coarse_score=0.5378, tight_fit=0.5819, ambiguity=0.6620, fitness=0.8800, rmse=0.0472, tilt_deg=0.7447, scale=0.9904, shift_m=2.5211, failed_checks=, ok=True
+  assigned 95023/139197 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  351 elements detected (>= 8 points each)
+
+05_01_eerste_verdieping_structure:
+  registration: coarse_score=0.6866, tight_fit=0.6544, ambiguity=0.6559, fitness=0.9255, rmse=0.0450, tilt_deg=0.9445, scale=0.9923, shift_m=4.0841, failed_checks=, ok=True
+  assigned 132365/213686 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  428 elements detected (>= 8 points each)
+
+06_01_eerste_verdieping_envelope:
+  registration: coarse_score=0.5722, tight_fit=0.6506, ambiguity=0.6212, fitness=0.9404, rmse=0.0458, tilt_deg=1.0114, scale=0.9810, shift_m=3.9840, failed_checks=, ok=True
+  assigned 180022/249648 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  588 elements detected (>= 8 points each)
+
+07_01_eerste_verdieping_interior:
+  registration: coarse_score=0.7678, tight_fit=0.6279, ambiguity=0.6360, fitness=0.9397, rmse=0.0468, tilt_deg=1.0107, scale=0.9944, shift_m=1.2103, failed_checks=, ok=True
+  assigned 192960/265386 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  628 elements detected (>= 8 points each)
+
+08_02_tweede_verdieping_structure:
+  registration: coarse_score=0.7444, tight_fit=0.6360, ambiguity=0.6557, fitness=0.9478, rmse=0.0467, tilt_deg=0.2701, scale=1.0143, shift_m=1.6643, failed_checks=, ok=True
+  assigned 227051/291072 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  678 elements detected (>= 8 points each)
+
+09_02_tweede_verdieping_envelope:
+  registration: coarse_score=0.8515, tight_fit=0.6367, ambiguity=0.5796, fitness=0.9526, rmse=0.0468, tilt_deg=1.1462, scale=0.9997, shift_m=1.1591, failed_checks=, ok=True
+  assigned 246606/319638 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  779 elements detected (>= 8 points each)
+
+10_02_tweede_verdieping_interior:
+  registration: coarse_score=0.8515, tight_fit=0.6499, ambiguity=0.5895, fitness=0.9538, rmse=0.0462, tilt_deg=0.2355, scale=1.0004, shift_m=3.5080, failed_checks=, ok=True
+  assigned 260221/333103 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  802 elements detected (>= 8 points each)
+
+11_03_derde_verdieping_structure:
+  registration: coarse_score=0.7745, tight_fit=0.7004, ambiguity=0.5132, fitness=0.9677, rmse=0.0443, tilt_deg=0.9474, scale=0.9921, shift_m=1.4667, failed_checks=, ok=True
+  assigned 387271/468344 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  897 elements detected (>= 8 points each)
+
+12_03_derde_verdieping_envelope:
+  registration: coarse_score=0.8570, tight_fit=0.6762, ambiguity=0.4960, fitness=0.9672, rmse=0.0456, tilt_deg=0.2987, scale=0.9952, shift_m=1.7230, failed_checks=, ok=True
+  assigned 394225/466974 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  927 elements detected (>= 8 points each)
+
+13_03_derde_verdieping_interior:
+  registration: coarse_score=0.4415, tight_fit=0.6601, ambiguity=0.0000, fitness=0.9669, rmse=0.0463, tilt_deg=0.9537, scale=1.0166, shift_m=3.0572, failed_checks=, ok=True
+  assigned 394434/473319 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  961 elements detected (>= 8 points each)
+
+14_04_dak_structure:
+  registration: coarse_score=0.8910, tight_fit=0.6594, ambiguity=0.0000, fitness=0.9680, rmse=0.0464, tilt_deg=0.1144, scale=0.9987, shift_m=3.7326, failed_checks=, ok=True
+  assigned 408302/485219 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  981 elements detected (>= 8 points each)
+
+15_04_dak_envelope:
+  registration: coarse_score=0.8894, tight_fit=0.6703, ambiguity=0.5411, fitness=0.9682, rmse=0.0458, tilt_deg=1.1576, scale=1.0027, shift_m=2.8468, failed_checks=, ok=True
+  assigned 401283/485855 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  972 elements detected (>= 8 points each)
+
+Wrote matches for 16 stage(s) under data/matches/

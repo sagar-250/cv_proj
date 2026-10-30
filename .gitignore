@@ -3,8 +3,6 @@
 __pycache__/
 *.pyc
 
-# Raw dataset (5.5GB, clone separately per docs/SPEC.md section 4.1)
-data/raw/
 data/renders/
 
 # Regenerable caches / intermediate artifacts (recompute via src/p4_match_bim.py,
@@ -12,7 +10,6 @@ data/renders/
 data/bim/bim_surface_samples.npz
 data/bim/bim_meshes.npz
 data/matches_cache/
-data/matches/
 data/observations/
 data/pointclouds/
 data/pointclouds_*/
@@ -21,5 +18,3 @@ data/pointclouds_*/
 Thumbs.db
 .DS_Store
 
-# Run logs
-logs/

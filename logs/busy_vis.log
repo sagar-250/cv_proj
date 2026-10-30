@@ -1,0 +1,18 @@
+Loading cached BIM surface samples from data/bim/bim_surface_samples.npz...
+  1355 elements, 12934946 surface samples
+00_m1_fundering_structure: 89 detected; 1266 undetected, of which 1042 would have had >=30 points if built
+01_m1_fundering_envelope: 126 detected; 1229 undetected, of which 983 would have had >=30 points if built
+02_00_begane_grond_structure: 143 detected; 1212 undetected, of which 915 would have had >=30 points if built
+03_00_begane_grond_envelope: 297 detected; 1058 undetected, of which 753 would have had >=30 points if built
+04_00_begane_grond_interior: 331 detected; 1024 undetected, of which 674 would have had >=30 points if built
+05_01_eerste_verdieping_structure: 409 detected; 946 undetected, of which 614 would have had >=30 points if built
+06_01_eerste_verdieping_envelope: 589 detected; 766 undetected, of which 470 would have had >=30 points if built
+07_01_eerste_verdieping_interior: 605 detected; 750 undetected, of which 421 would have had >=30 points if built
+08_02_tweede_verdieping_structure: 662 detected; 693 undetected, of which 365 would have had >=30 points if built
+09_02_tweede_verdieping_envelope: 737 detected; 618 undetected, of which 273 would have had >=30 points if built
+10_02_tweede_verdieping_interior: 783 detected; 572 undetected, of which 202 would have had >=30 points if built
+11_03_derde_verdieping_structure: 859 detected; 496 undetected, of which 118 would have had >=30 points if built
+12_03_derde_verdieping_envelope: 889 detected; 466 undetected, of which 89 would have had >=30 points if built
+13_03_derde_verdieping_interior: 917 detected; 438 undetected, of which 47 would have had >=30 points if built
+14_04_dak_structure: 941 detected; 414 undetected, of which 29 would have had >=30 points if built
+15_04_dak_envelope: 963 detected; 392 undetected, of which 18 would have had >=30 points if built
