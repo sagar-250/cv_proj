@@ -59,8 +59,10 @@ from p4_match_bim import ASSIGN_K, ASSIGN_MARGIN, build_bim_sample_tree  # noqa:
 
 IFC_PATH = "data/ifc/IFC Schependomlaan.ifc"
 MESH_CACHE = "data/bim/bim_meshes.npz"
-POINTCLOUD_DIR = "data/pointclouds"
-MATCHES_DIR = "data/matches"
+TAG = os.environ.get("RUN_TAG", "")   # e.g. RUN_TAG=interior_dart: reads data/pointclouds_<tag>, writes data/{matches,status}_<tag>
+SFX = f"_{TAG}" if TAG else ""
+POINTCLOUD_DIR = "data/pointclouds" + SFX
+MATCHES_DIR = "data/matches" + SFX
 SEED = 0
 
 

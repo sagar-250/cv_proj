@@ -79,11 +79,13 @@ import matplotlib.pyplot as plt
 
 BIM_CSV = "data/bim/bim_complete.csv"
 STATES_DIR = "data/states"
-MATCHES_DIR = "data/matches"
-POINTCLOUD_DIR = "data/pointclouds"
-STATUS_DIR = "data/status"
-OUT_TABLE = "results/main_table.csv"
-OUT_FIG = "results/figures/p7_progress_error.png"
+TAG = os.environ.get("RUN_TAG", "")   # e.g. RUN_TAG=interior_dart: reads data/pointclouds_<tag>, writes data/{matches,status}_<tag>
+SFX = f"_{TAG}" if TAG else ""
+MATCHES_DIR = "data/matches" + SFX
+POINTCLOUD_DIR = "data/pointclouds" + SFX
+STATUS_DIR = "data/status" + SFX
+OUT_TABLE = "results/main_table.csv" if not TAG else f"results/experiments/main_table{SFX}.csv"
+OUT_FIG = f"results/figures/p7_progress_error{SFX}.png"
 
 COMPLETED_THRESHOLD = 0.5
 PARTIAL_THRESHOLD = 0.15
@@ -291,7 +293,8 @@ def main():
     bim_df = pd.read_csv(BIM_CSV)
     stage_names = sorted(
         os.path.basename(p) for p in glob.glob(os.path.join(STATES_DIR, "*")) if os.path.isdir(p)
-    )
+        and (not TAG or os.path.exists(os.path.join(MATCHES_DIR, os.path.basename(p), "matches.json")))
+    )   # a tagged run may cover only some stages
 
     if args.mask == "final":
         # "ever observable" proxy: elements detected at the final (fully-built) stage
@@ -306,7 +309,7 @@ def main():
 
     rows = [score_stage(s, bim_df, well_covered_ids) for s in stage_names]
     df = pd.DataFrame(rows)
-    os.makedirs("results", exist_ok=True)
+    os.makedirs(os.path.dirname(OUT_TABLE), exist_ok=True)
     df.to_csv(OUT_TABLE, index=False)
     print(df.to_string(index=False))
     print(f"\nWrote {OUT_TABLE}")

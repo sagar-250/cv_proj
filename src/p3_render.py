@@ -62,8 +62,9 @@ from p2_p3_simulate_stages import (  # noqa: E402
     exterior_viewpoints, interior_viewpoints, raycast, make_ground, make_trees,
     apply_rigid_jitter, pack_entry, survey_offset, CLASS_COLOR,
     NOISE_SIGMA, DROPOUT_FRAC, ELEMENT_JITTER_T, ELEMENT_JITTER_DEG,
-    REG_JITTER_T, REG_JITTER_DEG,
+    REG_JITTER_T, REG_JITTER_DEG, pinhole_rays,
 )
+import open3d as o3d  # noqa: E402
 
 IFC_PATH = "data/ifc/IFC Schependomlaan.ifc"
 STATES_DIR = "data/states"
@@ -71,6 +72,7 @@ OUT_JS = "results/pointcloud_viewer_data.js"
 TARGET_POINTS_OUT = 55_000
 sim.TARGET_POINTS_OUT = TARGET_POINTS_OUT  # pack_entry reads this from its own module globals
 SEED = 0
+DART = False
 SENSOR = "simple"   # set from --sensor in main()
 SITE = "clean"      # set from --site in main()
 GEOREF = "small"    # set from --georef in main(): "small" = only the 8 cm / 1.2 deg REG_JITTER,
@@ -91,6 +93,7 @@ CLUTTER_RENDER_RGB = {   # chosen to overlap real materials, so colour can't sim
     "scaffold": (150, 152, 150), "crane": (214, 176, 36), "fence": (148, 154, 148),
     "props": (188, 96, 42), "pile": (134, 78, 58), "worker": (226, 150, 40),
 }
+CLUTTER_RENDER_RGB.update(site_clutter.INTERIOR_RGB)    # multi-part machines / tools, each part its own look
 MORTAR_RGB = (176, 172, 164)
 # (course height, unit length, joint width) in m, for the walls built from units
 COURSES = {"brick_brown": (0.0625, 0.22, 0.012), "brick_yellow": (0.0625, 0.22, 0.012),
@@ -217,7 +220,6 @@ def camera_colors(pts, classes, gids, normals, dirs, cos_inc, view, photo, scene
     lam = np.clip(nf @ sun, 0, None)
     lit = photo & (lam > 0)
     if lit.any():
-        import open3d as o3d
         o = pts[lit] + nf[lit] * 0.02
         rays = np.concatenate([o, np.broadcast_to(sun, o.shape)], axis=1).astype(np.float32)
         shadow = scene.test_occlusions(o3d.core.Tensor(rays)).numpy().astype(bool)
@@ -280,6 +282,54 @@ def stage_elements_from_manifest(manifest, all_elements, rng):
     return [jitter_element(e, rng, ELEMENT_JITTER_T, ELEMENT_JITTER_DEG) for e in out]
 
 
+DART_GRID = (480, 360)      # image size of the DART camera views
+DART_FOV = 80.0
+DART_HEADINGS = 4           # views per interior eye
+DART_EXT_STRIDE = 3         # every 3rd exterior orbit viewpoint
+DART_VIEWS = []             # filled by run_stage when --dart: one dict per image
+
+
+def dart_views(scene, tri_class, tri_gid, viewpoints, center, rng, color_rng):
+    """Organised camera images for DART: per pixel the first-hit xyz (NaN = sky), the camera colour
+    (same look as the main cloud) and the eval-only hit class. Interior eyes get DART_HEADINGS
+    views turned about z; exterior drones look at the building as in the main cloud."""
+    views = []
+    ext = [v for v in viewpoints if v[0] == "pinhole"][::DART_EXT_STRIDE]
+    for kind, eye in ext:
+        views.append((eye, center, True))
+    for kind, eye in viewpoints:
+        if kind == "pinhole":
+            continue
+        for h in range(DART_HEADINGS):
+            a = 2 * np.pi * h / DART_HEADINGS + rng.uniform(0, 0.4)
+            views.append((eye, eye + np.array([np.cos(a), np.sin(a), -0.05]), False))
+    out = []
+    for vi, (eye, target, photo) in enumerate(views):
+        origins, dirs = pinhole_rays(eye, target, DART_FOV, DART_GRID)
+        res = scene.cast_rays(o3d.core.Tensor(np.concatenate([origins, dirs], axis=1)))
+        t = res["t_hit"].numpy()
+        ok = np.isfinite(t)
+        prim = res["primitive_ids"].numpy()[ok]
+        pts = origins[ok] + t[ok, None] * dirs[ok]
+        normals = res["primitive_normals"].numpy()[ok]
+        cos = np.abs((normals * dirs[ok]).sum(axis=1))
+        col = camera_colors(pts, tri_class[prim], tri_gid[prim], normals, dirs[ok], cos,
+                            np.zeros(len(pts), int), np.full(len(pts), photo), scene, 1, color_rng)
+        w, h = DART_GRID
+        xyz = np.full((h * w, 3), np.nan, np.float32)
+        rgb = np.tile(np.array([176, 196, 214], np.uint8), (h * w, 1))
+        cls = np.full(h * w, "sky", dtype=object)
+        gid = np.full(h * w, "", dtype=object)
+        xyz[ok] = pts + rng.normal(0, NOISE_SIGMA, pts.shape)
+        rgb[ok] = col
+        cls[ok] = tri_class[prim]
+        gid[ok] = tri_gid[prim]
+        out.append({"eye": eye, "target": target, "xyz": xyz.reshape(h, w, 3), "rgb": rgb.reshape(h, w, 3),
+                    "gt_class": cls.reshape(h, w), "gt_gid": gid.reshape(h, w),
+                    "kind": "exterior" if photo else "interior"})
+    return out
+
+
 def run_stage(stage_elements, rng, ground_trees, clutter=None, color_rng=None):
     # camera plan from the building alone, so clutter doesn't move the cameras
     verts = np.concatenate([e["verts"] for e in stage_elements], axis=0).astype(np.float32)
@@ -293,6 +343,11 @@ def run_stage(stage_elements, rng, ground_trees, clutter=None, color_rng=None):
         eyes = np.array([eye for kind, eye in viewpoints if kind != "pinhole"]).reshape(-1, 3)
         clutter = site_clutter.drop_blocking(clutter, eyes)
     scene, tri_class, tri_gid, _ = make_o3d_scene(stage_elements + (clutter or []))
+    DART_VIEWS.clear()
+    if DART:   # own seeded streams: the main cloud is unchanged by --dart
+        DART_VIEWS.extend(dart_views(scene, tri_class, tri_gid, viewpoints, center,
+                                     np.random.default_rng([SEED, 29, len(viewpoints)]),
+                                     np.random.default_rng([SEED, 31, len(viewpoints)])))
     # (the extra ray geometry costs no random numbers, so xyz doesn't depend on --color)
     pts, classes, gids, rng_m, cos_inc, dirs, photo, normals, view = raycast(
         scene, tri_class, tri_gid, viewpoints, center, rng, return_geometry=True)
@@ -347,6 +402,27 @@ def run_stage(stage_elements, rng, ground_trees, clutter=None, color_rng=None):
             T_true, cam_eyes, cam_kinds, cam_target)  # pinhole cameras all look at cam_target
 
 
+def save_dart_views(stage_name, T_true):
+    """data/dart/{stage}/views.npz: all view images, in the same survey frame as the stage cloud."""
+    d = os.path.join("data", "dart", stage_name)
+    os.makedirs(d, exist_ok=True)
+    xyz = np.stack([v["xyz"] for v in DART_VIEWS])
+    xyz = xyz @ T_true[:3, :3].T + T_true[:3, 3]
+    cls = np.stack([v["gt_class"] for v in DART_VIEWS]).astype(str)
+    gid = np.stack([v["gt_gid"] for v in DART_VIEWS]).astype(str)
+    class_names, cls_i = np.unique(cls, return_inverse=True)     # ints, not strings: 100x smaller
+    gid_names, gid_i = np.unique(gid, return_inverse=True)
+    np.savez_compressed(os.path.join(d, "views.npz"), xyz=xyz.astype(np.float32),
+                        rgb=np.stack([v["rgb"] for v in DART_VIEWS]),
+                        gt_class_names=class_names, gt_class_idx=cls_i.reshape(cls.shape).astype(np.uint8),
+                        gt_gid_names=gid_names, gt_gid_idx=gid_i.reshape(gid.shape).astype(np.int32),
+                        kind=np.array([v["kind"] for v in DART_VIEWS]),
+                        # camera pose in the survey frame (same frame as xyz)
+                        eyes=(np.array([v["eye"] for v in DART_VIEWS]) @ T_true[:3, :3].T + T_true[:3, 3]).astype(np.float32),
+                        targets=(np.array([v["target"] for v in DART_VIEWS]) @ T_true[:3, :3].T + T_true[:3, 3]).astype(np.float32))
+    print(f"  saved {len(DART_VIEWS)} DART views to {d}/views.npz")
+
+
 def save_stage_pointcloud(stage_name, xyz, rgb, gt_class, gt_global_id, T_true, cam_eyes, cam_kinds,
                           cam_target, out_dir="data/pointclouds", deviated_ids=(), rgb_source="camera",
                           missing_ids=(), misplaced_ids=()):
@@ -387,14 +463,20 @@ def storey_short(storey):
 
 
 def main():
-    global SENSOR, GEOREF, SITE, COLOR, LOOK
+    global SENSOR, GEOREF, SITE, COLOR, LOOK, DART
     ap = argparse.ArgumentParser()
     ap.add_argument("--sensor", choices=["simple", "realistic"], default="simple")
     ap.add_argument("--georef", choices=["small", "gnss", "local"], default="small")
     ap.add_argument("--site", choices=["clean", "busy"], default="clean")
     ap.add_argument("--color", choices=["material", "class"], default="material")
+    ap.add_argument("--interior", type=int, default=0,
+                    help="busy site only: machinery / temporary items per built floor (0 = none)")
+    ap.add_argument("--stage", default=None, help="render only this stage directory name (e.g. 11_03_derde_verdieping_structure)")
+    ap.add_argument("--dart", action="store_true",
+                    help="also save camera images + organised xyz per stage in data/dart/ for dart_label.py")
     ap.add_argument("--out", default="data/pointclouds", help="output dir for the stage .npz files")
     args = ap.parse_args()
+    DART = args.dart
     SENSOR, GEOREF, SITE, COLOR = args.sensor, args.georef, args.site, args.color
     print(f"Sensor model: {SENSOR}, georeference: {GEOREF}, site: {SITE}, colour: {COLOR}")
     CLASS_COLOR.update(site_clutter.CLUTTER_COLOR)
@@ -446,7 +528,11 @@ def main():
             deviated = [e["global_id"] for e in stage_elements if e["global_id"] in dev]
             misplaced = [e["global_id"] for e in stage_elements if e["global_id"] in moved]
             clutter = site_clutter.stage_clutter(site, stage_elements, i, manifest["phase"],
-                                                 is_last=stage_dir == stage_dirs[-1])
+                                                 is_last=stage_dir == stage_dirs[-1],
+                                                 interior=args.interior)
+        if args.stage and os.path.basename(stage_dir) != args.stage:
+            entries.append(None)     # keep k (stage position) counting for the late-element logic
+            continue
         print(f"\nStage {i:02d} [{manifest['storey_milestone']} / {manifest['phase']}]: "
               f"{len(stage_elements)} elements ({manifest['n_fully_built']} full, "
               f"{manifest['n_partial']} partial, {len(missing)} late, {len(misplaced)} misplaced), "
@@ -456,6 +542,8 @@ def main():
          T_true, cam_eyes, cam_kinds, cam_target) = run_stage(stage_elements, rng, ground_trees, clutter,
                                                               np.random.default_rng([SEED, 11, i]))
         n_full = all_pts.shape[0]
+        if DART:
+            save_dart_views(os.path.basename(stage_dir), T_true)
 
         stage_name = os.path.basename(stage_dir)
         save_stage_pointcloud(stage_name, all_pts, all_col, all_gt_class, all_gt_gid,

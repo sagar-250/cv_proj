@@ -18,3 +18,9 @@ data/pointclouds_*/
 Thumbs.db
 .DS_Store
 
+
+# DART camera images (3 GB, regenerate with p3_render.py --dart)
+data/dart/
+# tagged experiment runs (RUN_TAG): regenerable
+data/matches_interior*/
+data/status_interior*/

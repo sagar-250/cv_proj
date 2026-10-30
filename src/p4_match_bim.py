@@ -68,8 +68,10 @@ import materials  # noqa: E402
 
 IFC_PATH = "data/ifc/IFC Schependomlaan.ifc"
 CSV_PATH = "data/bim/bim_complete.csv"
-POINTCLOUD_DIR = "data/pointclouds"
-OUT_DIR = "data/matches"
+TAG = os.environ.get("RUN_TAG", "")   # e.g. RUN_TAG=interior_dart: reads data/pointclouds_<tag>, writes data/{matches,status}_<tag>
+SFX = f"_{TAG}" if TAG else ""
+POINTCLOUD_DIR = "data/pointclouds" + SFX
+OUT_DIR = "data/matches" + SFX
 
 SAMPLE_DENSITY = 800.0          # samples per m^2 of BIM surface area
 ICP_COARSE_FILTER_DIST = 0.5    # keep only points within this of *some* BIM sample, before ICP
@@ -298,7 +300,7 @@ def match_stage(stage_name, tree, icp_target, tree_gid, bim_df, reg_target=None,
     return matches, xyz_reg, assigned_gid
 
 
-MATCH_CACHE_DIR = "data/matches_cache"
+MATCH_CACHE_DIR = "data/matches_cache" + SFX
 
 
 def match_stage_cached(stage_name, tree, icp_target, tree_gid, bim_df):

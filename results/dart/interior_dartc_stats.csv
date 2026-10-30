@@ -1,0 +1,2 @@
+stage,n_views,n_points,structure_precision,structure_recall,clutter_removed,clutter_in_cloud
+11_03_derde_verdieping_structure,236,1200000,0.956,0.9956,0.411,0.0438

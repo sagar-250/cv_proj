@@ -39,8 +39,7 @@ never sees any of this). All randomness is seeded.
 Used by p3_render.py --site busy.
 """
 import numpy as np
-import pandas as pd
-from scipy.ndimage import binary_closing, binary_fill_holes, distance_transform_edt
+from scipy.ndimage import binary_closing, binary_erosion, binary_fill_holes, distance_transform_edt
 
 BIM_CSV = "data/bim/bim_complete.csv"
 SEED = 0
@@ -120,6 +119,7 @@ class Site:
     """Footprint and fixed site furniture, built once from the full BIM."""
 
     def __init__(self, all_elements):
+        import pandas as pd   # lazy: dart_label.py imports this module in an env without pandas
         bim = pd.read_csv(BIM_CSV)
         ext_walls = bim[(bim.ifc_type == "IfcWall") & (bim.is_external == True)  # noqa: E712
                         & bim.storey.isin(["00 begane grond", "01 eerste verdieping"])]
@@ -333,6 +333,185 @@ def worker(c, rng):
                            box(c + [0, 0, 1.62], [0.22, 0.22, 0.24], yaw)])
 
 
+# Interior objects are built from several parts with different looks (paint, rubber, metal, wood, ...):
+# one pseudo-element per look, class = the look. Render colours (p3_render.py uses these too).
+INTERIOR_RGB = {
+    "machinery": (232, 170, 20), "mach_red": (196, 52, 42), "mach_blue": (46, 104, 172),   # paint
+    "mach_dark": (46, 46, 52), "mach_metal": (150, 156, 162),                                # rubber / frame, steel
+    "temp_wood": (150, 110, 70), "temp_blue": (40, 90, 160), "temp_red": (190, 40, 35),
+    "temp_orange": (232, 122, 30), "temp_metal": (172, 176, 182), "temp_dark": (40, 40, 42),
+}
+INTERIOR_CLASSES = tuple(INTERIOR_RGB)
+CLUTTER_COLOR.update({k: list(v) for k, v in INTERIOR_RGB.items()})
+PAINTS = ("machinery", "mach_red", "mach_blue")
+
+
+def cyl(p, q, r, n=14):
+    """Closed cylinder of radius r from point p to point q."""
+    p, q = np.asarray(p, float), np.asarray(q, float)
+    d = q - p
+    L = np.linalg.norm(d)
+    u = d / L
+    a = np.cross(u, [0, 0, 1.0]) if abs(u[2]) < 0.9 else np.cross(u, [1.0, 0, 0])
+    a /= np.linalg.norm(a)
+    b = np.cross(u, a)
+    t = np.linspace(0, 2 * np.pi, n, endpoint=False)
+    ring = r * (np.cos(t)[:, None] * a + np.sin(t)[:, None] * b)
+    v = np.concatenate([p + ring, q + ring, [p, q]])
+    f = []
+    for k in range(n):
+        k2 = (k + 1) % n
+        f += [[k, k2, n + k2], [k, n + k2, n + k], [2 * n, k2, k], [2 * n + 1, n + k, n + k2]]
+    return v, np.array(f)
+
+
+def look(groups):
+    """{class: [mesh parts]} -> one pseudo-element per class."""
+    return [item(cls, parts) for cls, parts in groups.items() if parts]
+
+
+def frame(c, yaw):
+    a = np.array([np.cos(yaw), np.sin(yaw), 0.0])
+    return a, np.array([-a[1], a[0], 0.0])
+
+
+def generator(c, rng):
+    yaw, paint = rng.uniform(0, np.pi), PAINTS[rng.integers(3)]
+    a, n = frame(c, yaw)
+    return look({paint: [box(c + [0, 0, 0.55], [1.1, 0.6, 0.6], yaw), box(c + a * 0.0 + [0, 0, 0.9], [0.9, 0.5, 0.06], yaw)],
+                 "mach_dark": [box(c + [0, 0, 0.06], [1.2, 0.7, 0.12], yaw), box(c + a * 0.56 + [0, 0, 0.55], [0.04, 0.4, 0.3], yaw)],
+                 "mach_metal": [cyl(c - a * 0.35 + [0, 0, 0.9], c - a * 0.35 + [0, 0, 1.25], 0.04),
+                                box(c + n * 0.31 + [0, 0, 0.55], [0.9, 0.02, 0.5], yaw)]})
+
+
+def mixer(c, rng):
+    yaw, paint = rng.uniform(0, np.pi), PAINTS[rng.integers(3)]
+    a, n = frame(c, yaw)
+    top = c + [0, 0, 1.1]
+    return look({paint: [cyl(top - a * 0.35 - [0, 0, 0.2], top + a * 0.35 + [0, 0, 0.3], 0.38, 16)],
+                 "mach_dark": [cyl(c + n * s + [0, 0, 0.2], c + n * (s + 0.08 * np.sign(s)) + [0, 0, 0.2], 0.2)
+                               for s in (-0.5, 0.5)],
+                 "mach_metal": [bar(c + n * s + [0, 0, 0.2], top - a * 0.1 + n * 0.0, 0.05) for s in (-0.5, 0.5)]
+                               + [bar(c - a * 0.6 + [0, 0, 0.5], c - a * 0.9 + [0, 0, 0.9], 0.04)]})
+
+
+def compressor(c, rng):
+    yaw, paint = rng.uniform(0, np.pi), PAINTS[rng.integers(3)]
+    a, n = frame(c, yaw)
+    z = np.array([0, 0, 0.45])
+    return look({paint: [cyl(c - a * 0.6 + z, c + a * 0.6 + z, 0.24, 16)],
+                 "mach_dark": [box(c + [0, 0, 0.2], [1.2, 0.5, 0.1], yaw), box(c + a * 0.7 + [0, 0, 0.45], [0.3, 0.4, 0.4], yaw)]
+                               + [cyl(c + a * 0.45 + n * s + [0, 0, 0.17], c + a * 0.45 + n * (s + 0.06 * np.sign(s)) + [0, 0, 0.17], 0.17)
+                                  for s in (-0.3, 0.3)],
+                 "mach_metal": [bar(c - a * 0.75 + [0, 0, 0.3], c - a * 0.75 + [0, 0, 1.0], 0.03),
+                                bar(c - a * 0.75 + [0, 0, 1.0], c - a * 0.3 + [0, 0, 1.0], 0.03)]})
+
+
+def scissor_lift(c, rng):
+    yaw, paint = rng.uniform(0, np.pi), PAINTS[rng.integers(3)]
+    a, n = frame(c, yaw)
+    metal = []
+    for s in (-0.45, 0.45):
+        metal += [bar(c + n * s - a * 0.7 + [0, 0, 0.35], c + n * s + a * 0.7 + [0, 0, 1.55], 0.07),
+                  bar(c + n * s + a * 0.7 + [0, 0, 0.35], c + n * s - a * 0.7 + [0, 0, 1.55], 0.07)]
+    rail = [bar(c + a * x + n * y + [0, 0, 1.65], c + a * x + n * y + [0, 0, 2.6], 0.03)
+            for x in (-0.9, 0.9) for y in (-0.5, 0.5)]
+    rail += [bar(c + a * 0.9 + n * -0.5 + [0, 0, 2.6], c + a * 0.9 + n * 0.5 + [0, 0, 2.6], 0.03)]
+    return look({paint: [box(c + [0, 0, 1.6], [2.0, 1.0, 0.08], yaw), box(c + [0, 0, 0.2], [2.0, 0.9, 0.24], yaw)],
+                 "mach_dark": [cyl(c + a * x + n * y + [0, 0, 0.12], c + a * x + n * (y + 0.1 * np.sign(y)) + [0, 0, 0.12], 0.12)
+                               for x in (-0.8, 0.8) for y in (-0.5, 0.5)],
+                 "mach_metal": metal + rail})
+
+
+def ladder(c, rng):
+    yaw = rng.uniform(0, np.pi)
+    a, n = frame(c, yaw)
+    L = rng.uniform(2.0, 3.0)
+    lean = a * 0.35 * L
+    rails = [bar(c + n * s, c + n * s + lean + [0, 0, L], 0.05) for s in (-0.2, 0.2)]
+    rungs = [bar(c - n * 0.2 + lean * t + [0, 0, L * t], c + n * 0.2 + lean * t + [0, 0, L * t], 0.03)
+             for t in np.arange(0.2, 1.0, 0.2)]
+    return look({"temp_orange": rails, "temp_metal": rungs})
+
+
+def trestle(c, rng):
+    yaw = rng.uniform(0, np.pi)
+    a, n = frame(c, yaw)
+    legs = [bar(c + a * s + n * t * 1.5, c + a * s * 0.8 + [0, 0, 0.85], 0.05) for s in (-0.7, 0.7) for t in (-0.15, 0.15)]
+    return look({"temp_wood": [box(c + [0, 0, 0.87], [1.8, 0.3, 0.06], yaw)], "temp_metal": legs})
+
+
+def barrel(c, rng):
+    cls = ("temp_blue", "temp_red", "temp_metal")[rng.integers(3)]
+    h = 0.9
+    return look({cls: [cyl(c, c + [0, 0, h], 0.29, 16)],
+                 "temp_dark": [cyl(c + [0, 0, z], c + [0, 0, z + 0.04], 0.3, 16) for z in (0.25, 0.65)]})
+
+
+def cable_reel(c, rng):
+    yaw = rng.uniform(0, np.pi)
+    a, n = frame(c, yaw)
+    z = np.array([0, 0, 0.45])
+    return look({"temp_wood": [cyl(c + n * s + z, c + n * (s + 0.05) + z, 0.45, 18) for s in (-0.25, 0.2)],
+                 "temp_dark": [cyl(c - n * 0.2 + z, c + n * 0.2 + z, 0.36, 18)],
+                 "temp_metal": [cyl(c - n * 0.3 + z, c + n * 0.3 + z, 0.06)]})
+
+
+def toolbox(c, rng):
+    yaw = rng.uniform(0, np.pi)
+    return look({"temp_red": [box(c + [0, 0, 0.18], [0.9, 0.42, 0.36], yaw)],
+                 "temp_dark": [box(c + [0, 0, 0.4], [0.5, 0.06, 0.06], yaw)]})
+
+
+def bucket_stack(c, rng):
+    pos = rng.uniform(-0.4, 0.4, (rng.integers(2, 5), 2))
+    return look({"temp_orange": [cyl(c + [x, y, 0], c + [x, y, 0.34], 0.16) for x, y in pos],
+                 "temp_dark": [cyl(c + [x, y, 0.34], c + [x, y, 0.37], 0.17) for x, y in pos]})
+
+
+INTERIOR_MAKERS = (generator, mixer, compressor, scissor_lift, ladder, trestle, barrel,
+                   cable_reel, toolbox, bucket_stack)
+
+
+def wall_pair(site, ground_slabs, rng):
+    """Two machines on either side of the same outer wall: one on the ground floor just inside, one on
+    the ground just outside. Each hides a patch of that wall from its own side; the other side still sees it."""
+    edge = site.mask & ~binary_erosion(site.mask)
+    cells = np.argwhere(edge)
+    for _ in range(60):
+        i, j = cells[rng.integers(len(cells))]
+        g = site.grad[i, j]
+        if np.linalg.norm(g) < 1e-6:
+            continue
+        g = g / np.linalg.norm(g)
+        p = site.origin + (np.array([i, j]) + 0.5) * RES
+        inside, outside = p - g * 1.2, p + g * 1.6
+        for sl in ground_slabs:
+            lo, hi = sl["verts"].min(axis=0), sl["verts"].max(axis=0)
+            if (lo[:2] < inside).all() and (inside < hi[:2]).all():
+                top = np.array([inside[0], inside[1], hi[2]])
+                low = np.array([outside[0], outside[1], site.base_z])
+                kind = INTERIOR_MAKERS[rng.integers(4)]    # machinery only
+                return kind(top, rng) + kind(low, rng)
+    return []
+
+
+def interior_objects(slabs, rng, n_per_floor, site=None, n_pairs=2):
+    """Machinery and temporary items standing on built floors (random kind, spot, yaw), plus
+    `n_pairs` machine pairs on either side of an outer wall."""
+    by_floor = {}
+    for s in slabs:
+        by_floor.setdefault(round(s["z_max"] / 0.3) * 0.3, []).append(s)
+    out = []
+    if site is not None and by_floor:
+        for _ in range(n_pairs):
+            out += wall_pair(site, by_floor[min(by_floor)], rng)
+    for z in sorted(by_floor):
+        for c in _floor_spots(by_floor[z], rng, n_per_floor, 2.5):
+            out += INTERIOR_MAKERS[rng.integers(len(INTERIOR_MAKERS))](c, rng)
+    return out
+
+
 def props(slabs, rng):
     """Shoring poles under the newest floor (structure stages). A "floor" is a
     slab level with real area; small sloped roof bits don't count."""
@@ -357,8 +536,9 @@ def props(slabs, rng):
     return item("props", parts) if parts else None
 
 
-def stage_clutter(site, stage_elements, stage_index, phase, is_last):
-    """All clutter items for one stage (list of pseudo-elements)."""
+def stage_clutter(site, stage_elements, stage_index, phase, is_last, interior=0):
+    """All clutter items for one stage (list of pseudo-elements). `interior` = machinery /
+    temporary items per built floor (own seeded stream, so 0 leaves everything else unchanged)."""
     rng = np.random.default_rng([SEED, 11, stage_index])
     top_z = max(e["z_max"] for e in stage_elements)
     slabs = [e for e in stage_elements if e["ifc_type"] == "IfcSlab"]
@@ -378,6 +558,8 @@ def stage_clutter(site, stage_elements, stage_index, phase, is_last):
         items.append(worker(c, rng))
     for c in _floor_spots(upper, rng, N_FLOOR_WORKERS, 1.5):
         items.append(worker(c, rng))
+    if interior:
+        items += interior_objects(slabs, np.random.default_rng([SEED, 23, stage_index]), interior, site)
     return [it for it in items if it is not None]
 
 
@@ -386,7 +568,7 @@ def drop_blocking(items, eyes, pad=0.5):
     keep = []
     for it in items:
         lo, hi = it["verts"].min(axis=0) - pad, it["verts"].max(axis=0) + pad
-        small = it["ifc_type"] in ("pile", "worker")
+        small = it["ifc_type"] in ("pile", "worker") + INTERIOR_CLASSES
         if small and np.any(np.all((eyes >= lo) & (eyes <= hi), axis=1)):
             continue
         keep.append(it)
