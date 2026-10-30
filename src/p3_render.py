@@ -16,7 +16,9 @@ the building -- scaffolding, tower crane, fence, shoring props, material
 piles, workers -- and builds 4% of elements a few cm off their designed
 position. Clutter is raycast like the building (it occludes and gets sensor
 noise), labelled in gt_class; the deviated ids are saved as eval-only
-gt_deviated_ids.
+gt_deviated_ids. It also leaves a few scheduled elements out for two stages
+(late, gt_missing_ids) and builds a few walls/columns 0.6-1.5 m from their
+design place (gt_misplaced_ids); the ground truth counts both as not built.
 
 --color material (default) gives every point the colour a camera would
 record, so registration can use colour (src/color_registration.py). The
@@ -346,7 +348,8 @@ def run_stage(stage_elements, rng, ground_trees, clutter=None, color_rng=None):
 
 
 def save_stage_pointcloud(stage_name, xyz, rgb, gt_class, gt_global_id, T_true, cam_eyes, cam_kinds,
-                          cam_target, out_dir="data/pointclouds", deviated_ids=(), rgb_source="camera"):
+                          cam_target, out_dir="data/pointclouds", deviated_ids=(), rgb_source="camera",
+                          missing_ids=(), misplaced_ids=()):
     """Plain float32 xyz in the original BIM world frame (same frame as
     bim_complete.csv), NOT the viewer's centered/axis-swapped/quantized one --
     this is what a segmentation script should load. gt_class/gt_global_id and
@@ -369,6 +372,8 @@ def save_stage_pointcloud(stage_name, xyz, rgb, gt_class, gt_global_id, T_true, 
         cam_kinds=cam_kinds,
         cam_target=cam_target,
         gt_deviated_ids=np.asarray(sorted(deviated_ids), dtype="<U24"),
+        gt_missing_ids=np.asarray(sorted(missing_ids), dtype="<U24"),
+        gt_misplaced_ids=np.asarray(sorted(misplaced_ids), dtype="<U24"),
         rgb_source=rgb_source,
     )
 
@@ -411,11 +416,14 @@ def main():
                     *make_trees(full_center, full_radius, base_z, clutter_rng))
     ground_trees = (ground_trees[0], ground_trees[1], ground_trees[2], ground_trees[3])
 
-    site, dev = None, {}
+    site, dev, late, moved = None, {}, set(), {}
     if SITE == "busy":
         site = site_clutter.Site(all_elements)
         dev = site_clutter.deviations(all_elements.keys())
-        print(f"Busy site: {len(dev)} elements built off their designed position")
+        late, moved = site_clutter.late_and_misplaced(all_elements, dev)
+        print(f"Busy site: {len(dev)} elements built 4-12 cm off, {len(moved)} misplaced, "
+              f"{len(late)} late")
+    first_stage = {}   # gid -> loop index of the first stage that schedules it
 
     stage_dirs = sorted(glob.glob(os.path.join(STATES_DIR, "*")))
     entries = []
@@ -426,15 +434,23 @@ def main():
         rng = np.random.default_rng(SEED + 1000 + i)
 
         stage_elements = stage_elements_from_manifest(manifest, all_elements, rng)
-        clutter, deviated = None, ()
+        clutter, deviated, missing, misplaced = None, (), (), ()
+        k = len(entries)
+        for e in stage_elements:
+            first_stage.setdefault(e["global_id"], k)
         if site is not None:
-            stage_elements = site_clutter.apply_deviations(stage_elements, dev)
+            missing = [e["global_id"] for e in stage_elements
+                       if e["global_id"] in late and k - first_stage[e["global_id"]] < site_clutter.LATE_STAGES]
+            stage_elements = [e for e in stage_elements if e["global_id"] not in set(missing)]
+            stage_elements = site_clutter.apply_deviations(stage_elements, {**dev, **moved})
             deviated = [e["global_id"] for e in stage_elements if e["global_id"] in dev]
+            misplaced = [e["global_id"] for e in stage_elements if e["global_id"] in moved]
             clutter = site_clutter.stage_clutter(site, stage_elements, i, manifest["phase"],
                                                  is_last=stage_dir == stage_dirs[-1])
         print(f"\nStage {i:02d} [{manifest['storey_milestone']} / {manifest['phase']}]: "
               f"{len(stage_elements)} elements ({manifest['n_fully_built']} full, "
-              f"{manifest['n_partial']} partial), raycasting...")
+              f"{manifest['n_partial']} partial, {len(missing)} late, {len(misplaced)} misplaced), "
+              f"raycasting...")
 
         (all_pts, all_col, all_gt_class, all_gt_gid, n_structure, center, fr,
          T_true, cam_eyes, cam_kinds, cam_target) = run_stage(stage_elements, rng, ground_trees, clutter,
@@ -444,7 +460,8 @@ def main():
         stage_name = os.path.basename(stage_dir)
         save_stage_pointcloud(stage_name, all_pts, all_col, all_gt_class, all_gt_gid,
                               T_true, cam_eyes, cam_kinds, cam_target, out_dir=args.out,
-                              deviated_ids=deviated, rgb_source="camera" if COLOR == "material" else "class")
+                              deviated_ids=deviated, rgb_source="camera" if COLOR == "material" else "class",
+                              missing_ids=missing, misplaced_ids=misplaced)
 
         label = f"BIM: {i:02d} {storey_short(manifest['storey_milestone'])} - {manifest['phase']}"
         entry = pack_entry(label, all_pts, all_col, n_full, center, fr * 1.15)

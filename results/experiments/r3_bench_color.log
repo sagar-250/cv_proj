@@ -1,2 +1,106 @@
 BIM target prepared in 31.4s
 00_m1_fundering_structur gnss  #00 plan     err=   0.011 m  OK  flagged=False  (302.1s)
+00_m1_fundering_structur gnss  #00 plan_color_rank err=   0.011 m  OK  flagged=False  (200.1s)
+00_m1_fundering_structur gnss  #00 plan_color_wrongcat err=   0.011 m  OK  flagged=False  (262.6s)
+00_m1_fundering_structur local #00 plan     err=   0.012 m  OK  flagged=False  (362.9s)
+00_m1_fundering_structur local #00 plan_color_rank err=   0.012 m  OK  flagged=False  (350.3s)
+00_m1_fundering_structur local #00 plan_color_wrongcat err=   0.012 m  OK  flagged=False  (463.5s)
+01_m1_fundering_envelope gnss  #00 plan     err=   0.019 m  OK  flagged=False  (157.1s)
+01_m1_fundering_envelope gnss  #00 plan_color_rank err=   0.019 m  OK  flagged=False  (136.0s)
+01_m1_fundering_envelope gnss  #00 plan_color_wrongcat err=   0.013 m  OK  flagged=False  (258.1s)
+01_m1_fundering_envelope local #00 plan     err=   0.013 m  OK  flagged=False  (364.3s)
+01_m1_fundering_envelope local #00 plan_color_rank err=   0.013 m  OK  flagged=False  (306.3s)
+01_m1_fundering_envelope local #00 plan_color_wrongcat err=   0.013 m  OK  flagged=False  (437.7s)
+03_00_begane_grond_envel gnss  #00 plan     err=   0.013 m  OK  flagged=False  (174.0s)
+03_00_begane_grond_envel gnss  #00 plan_color_rank err=   0.016 m  OK  flagged=False  (165.9s)
+03_00_begane_grond_envel gnss  #00 plan_color_wrongcat err=   0.017 m  OK  flagged=False  (266.9s)
+03_00_begane_grond_envel local #00 plan     err=   0.023 m  OK  flagged=False  (367.5s)
+03_00_begane_grond_envel local #00 plan_color_rank err=   0.026 m  OK  flagged=False  (364.8s)
+03_00_begane_grond_envel local #00 plan_color_wrongcat err=   0.023 m  OK  flagged=False  (501.1s)
+07_01_eerste_verdieping_ gnss  #00 plan     err=   0.039 m  OK  flagged=False  (187.7s)
+07_01_eerste_verdieping_ gnss  #00 plan_color_rank err=   0.039 m  OK  flagged=False  (208.7s)
+07_01_eerste_verdieping_ gnss  #00 plan_color_wrongcat err=   0.044 m  OK  flagged=False  (301.0s)
+07_01_eerste_verdieping_ local #00 plan     err=   0.025 m  OK  flagged=False  (436.2s)
+07_01_eerste_verdieping_ local #00 plan_color_rank err=   0.041 m  OK  flagged=False  (287.0s)
+07_01_eerste_verdieping_ local #00 plan_color_wrongcat err=   0.041 m  OK  flagged=False  (355.1s)
+11_03_derde_verdieping_s gnss  #00 plan     err=   0.010 m  OK  flagged=False  (197.3s)
+11_03_derde_verdieping_s gnss  #00 plan_color_rank err=   0.011 m  OK  flagged=False  (186.3s)
+11_03_derde_verdieping_s gnss  #00 plan_color_wrongcat err=   0.011 m  OK  flagged=False  (283.5s)
+11_03_derde_verdieping_s local #00 plan     err=   0.009 m  OK  flagged=False  (383.7s)
+11_03_derde_verdieping_s local #00 plan_color_rank err=   0.009 m  OK  flagged=False  (375.1s)
+11_03_derde_verdieping_s local #00 plan_color_wrongcat err=   0.008 m  OK  flagged=False  (470.3s)
+15_04_dak_envelope       gnss  #00 plan     err=   0.013 m  OK  flagged=False  (115.5s)
+15_04_dak_envelope       gnss  #00 plan_color_rank err=   0.014 m  OK  flagged=False  (113.9s)
+15_04_dak_envelope       gnss  #00 plan_color_wrongcat err=   0.013 m  OK  flagged=False  (207.6s)
+15_04_dak_envelope       local #00 plan     err=   0.006 m  OK  flagged=False  (290.0s)
+15_04_dak_envelope       local #00 plan_color_rank err=   0.006 m  OK  flagged=False  (286.0s)
+15_04_dak_envelope       local #00 plan_color_wrongcat err=   0.006 m  OK  flagged=False  (375.0s)
+
+# R3 registration benchmark
+
+Success = mean BIM-point displacement < 0.05 m. 1 offsets per stage per regime, 6 stages.
+
+silent_fails = wrong AND not flagged (must be 0); flagged_fails = wrong but the method said so; false_alarms = right but flagged.
+
+| method              | regime   |   trials |   success_rate |   silent_fails |   flagged_fails |   false_alarms |   median_err_m |   mean_secs |
+|:--------------------|:---------|---------:|---------------:|---------------:|----------------:|---------------:|---------------:|------------:|
+| plan                | gnss     |        6 |          1.000 |              0 |               0 |              0 |          0.013 |     188.959 |
+| plan                | local    |        6 |          1.000 |              0 |               0 |              0 |          0.012 |     367.422 |
+| plan_color_rank     | gnss     |        6 |          1.000 |              0 |               0 |              0 |          0.015 |     168.490 |
+| plan_color_rank     | local    |        6 |          1.000 |              0 |               0 |              0 |          0.012 |     328.255 |
+| plan_color_wrongcat | gnss     |        6 |          1.000 |              0 |               0 |              0 |          0.013 |     263.282 |
+| plan_color_wrongcat | local    |        6 |          1.000 |              0 |               0 |              0 |          0.013 |     433.774 |
+
+## Success rate by stage
+
+| stage                            |   plan |   plan_color_rank |   plan_color_wrongcat |
+|:---------------------------------|-------:|------------------:|----------------------:|
+| 00_m1_fundering_structure        |   1.00 |              1.00 |                  1.00 |
+| 01_m1_fundering_envelope         |   1.00 |              1.00 |                  1.00 |
+| 03_00_begane_grond_envelope      |   1.00 |              1.00 |                  1.00 |
+| 07_01_eerste_verdieping_interior |   1.00 |              1.00 |                  1.00 |
+| 11_03_derde_verdieping_structure |   1.00 |              1.00 |                  1.00 |
+| 15_04_dak_envelope               |   1.00 |              1.00 |                  1.00 |
+=== item 3: bench resume with plan_color Fri Oct 30 02:37:13 AM IST 2026
+resuming: 36 trials already in results/r3_registration_bench_color.csv
+BIM target prepared in 12.4s
+00_m1_fundering_structur gnss  #00 plan_color err=   0.013 m  OK  flagged=False  (168.5s)
+00_m1_fundering_structur local #00 plan_color err=   0.012 m  OK  flagged=False  (299.2s)
+01_m1_fundering_envelope gnss  #00 plan_color err=   0.015 m  OK  flagged=False  (159.1s)
+01_m1_fundering_envelope local #00 plan_color err=   0.014 m  OK  flagged=False  (305.9s)
+03_00_begane_grond_envel gnss  #00 plan_color err=   0.016 m  OK  flagged=False  (186.2s)
+03_00_begane_grond_envel local #00 plan_color err=   0.025 m  OK  flagged=False  (318.6s)
+07_01_eerste_verdieping_ gnss  #00 plan_color err=   0.044 m  OK  flagged=False  (201.6s)
+07_01_eerste_verdieping_ local #00 plan_color err=   0.041 m  OK  flagged=False  (358.7s)
+11_03_derde_verdieping_s gnss  #00 plan_color err=   0.011 m  OK  flagged=False  (275.3s)
+11_03_derde_verdieping_s local #00 plan_color err=   0.009 m  OK  flagged=False  (458.3s)
+15_04_dak_envelope       gnss  #00 plan_color err=   0.013 m  OK  flagged=False  (197.5s)
+15_04_dak_envelope       local #00 plan_color err=   0.006 m  OK  flagged=False  (360.7s)
+
+# R3 registration benchmark
+
+Success = mean BIM-point displacement < 0.05 m. 1 offsets per stage per regime, 6 stages.
+
+silent_fails = wrong AND not flagged (must be 0); flagged_fails = wrong but the method said so; false_alarms = right but flagged.
+
+| method              | regime   |   trials |   success_rate |   silent_fails |   flagged_fails |   false_alarms |   median_err_m |   mean_secs |
+|:--------------------|:---------|---------:|---------------:|---------------:|----------------:|---------------:|---------------:|------------:|
+| plan                | gnss     |        6 |          1.000 |              0 |               0 |              0 |          0.013 |     188.959 |
+| plan                | local    |        6 |          1.000 |              0 |               0 |              0 |          0.012 |     367.422 |
+| plan_color          | gnss     |        6 |          1.000 |              0 |               0 |              0 |          0.014 |     198.018 |
+| plan_color          | local    |        6 |          1.000 |              0 |               0 |              0 |          0.013 |     350.222 |
+| plan_color_rank     | gnss     |        6 |          1.000 |              0 |               0 |              0 |          0.015 |     168.490 |
+| plan_color_rank     | local    |        6 |          1.000 |              0 |               0 |              0 |          0.012 |     328.255 |
+| plan_color_wrongcat | gnss     |        6 |          1.000 |              0 |               0 |              0 |          0.013 |     263.282 |
+| plan_color_wrongcat | local    |        6 |          1.000 |              0 |               0 |              0 |          0.013 |     433.774 |
+
+## Success rate by stage
+
+| stage                            |   plan |   plan_color |   plan_color_rank |   plan_color_wrongcat |
+|:---------------------------------|-------:|-------------:|------------------:|----------------------:|
+| 00_m1_fundering_structure        |   1.00 |         1.00 |              1.00 |                  1.00 |
+| 01_m1_fundering_envelope         |   1.00 |         1.00 |              1.00 |                  1.00 |
+| 03_00_begane_grond_envelope      |   1.00 |         1.00 |              1.00 |                  1.00 |
+| 07_01_eerste_verdieping_interior |   1.00 |         1.00 |              1.00 |                  1.00 |
+| 11_03_derde_verdieping_structure |   1.00 |         1.00 |              1.00 |                  1.00 |
+| 15_04_dak_envelope               |   1.00 |         1.00 |              1.00 |                  1.00 |

@@ -23,6 +23,13 @@ stages: a wall built in the wrong place stays there). The ids are stored in
 the stage npz as eval-only `gt_deviated_ids`; these elements still count as
 built in the ground truth.
 
+Two coarser as-built errors (both eval-only, saved in the stage npz):
+  late       3% of elements are missing for the first 2 stages after the
+             schedule says they are built (`gt_missing_ids`), then turn up.
+  misplaced  1.5% of walls/columns are built 0.6-1.5 m from their designed
+             place and stay there (`gt_misplaced_ids`). They must be torn
+             down and rebuilt, so the ground truth counts both as not built.
+
 Clutter items are returned as pseudo-elements (same dict shape as P3's BIM
 elements, global_id "" and ifc_type = the clutter class), so the raycaster
 gives them occlusion, sensor noise and a gt_class label for free. The site
@@ -43,6 +50,10 @@ CLUTTER_COLOR = {
 }
 DEVIATION_FRAC = 0.04
 DEVIATION_RANGE = (0.04, 0.12)   # m, horizontal
+LATE_FRAC, LATE_STAGES = 0.03, 2
+MISPLACED_FRAC = 0.015
+MISPLACED_RANGE = (0.6, 1.5)      # m, horizontal
+MISPLACED_TYPES = ("IfcWall", "IfcWallStandardCase", "IfcColumn")
 RES = 0.25                        # footprint raster (m)
 SCAFFOLD_IN, SCAFFOLD_OUT = 0.3, 1.0
 SCAFFOLD_SPACING = 2.0
@@ -242,6 +253,22 @@ def deviations(all_gids):
     ang = rng.uniform(0, 2 * np.pi, len(gids))
     return {g: np.array([m * np.cos(a), m * np.sin(a), 0.0])
             for g, p, m, a in zip(gids, pick, mag, ang) if p}
+
+
+def late_and_misplaced(all_elements, dev):
+    """Coarse as-built errors: (set of late gids, gid -> (dx, dy, 0) for misplaced ones)."""
+    gids = sorted(all_elements)
+    rng = np.random.default_rng([SEED, 17])
+    late = {g for g, r in zip(gids, rng.random(len(gids))) if r < LATE_FRAC}
+    cand = [g for g in gids if all_elements[g]["ifc_type"] in MISPLACED_TYPES
+            and g not in dev and g not in late]
+    rng = np.random.default_rng([SEED, 19])
+    pick = rng.random(len(cand)) < MISPLACED_FRAC
+    mag = rng.uniform(*MISPLACED_RANGE, len(cand))
+    ang = rng.uniform(0, 2 * np.pi, len(cand))
+    moved = {g: np.array([m * np.cos(a), m * np.sin(a), 0.0])
+             for g, p, m, a in zip(cand, pick, mag, ang) if p}
+    return late, moved
 
 
 def apply_deviations(elements, dev):

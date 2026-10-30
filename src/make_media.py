@@ -243,7 +243,8 @@ def panels(images, titles, suptitle=None, legend=None, notes=None, ncols=None, s
     nrows = int(np.ceil(n / ncols))
     h0, w0 = images[0].shape[:2]
     fw = ncols * w0 / 100 * scale
-    fh = nrows * (h0 / 100 * scale + 0.45) + (0.6 if suptitle else 0) + (0.5 if legend else 0)
+    lrows = int(np.ceil(len(legend) / 7)) if legend else 0   # at most 7 legend entries per row
+    fh = nrows * (h0 / 100 * scale + 0.45) + (0.6 if suptitle else 0) + 0.35 * lrows + (0.15 if legend else 0)
     fig, axes = plt.subplots(nrows, ncols, figsize=(fw, fh), squeeze=False)
     for ax in axes.flat:
         ax.axis("off")
@@ -258,8 +259,8 @@ def panels(images, titles, suptitle=None, legend=None, notes=None, ncols=None, s
         fig.suptitle(suptitle, fontsize=14)
     if legend:
         fig.legend(handles=[Patch(color=c, label=l) for l, c in legend], loc="lower center",
-                   ncol=len(legend), fontsize=10, frameon=False)
-    fig.tight_layout(rect=(0, 0.05 if legend else 0, 1, 0.97 if suptitle else 1))
+                   ncol=int(np.ceil(len(legend) / lrows)), fontsize=10, frameon=False)
+    fig.tight_layout(rect=(0, 0.035 * lrows + 0.015 if legend else 0, 1, 0.97 if suptitle else 1))
     return fig
 
 
@@ -819,6 +820,10 @@ def errors():
 
 # ------------------------------------------------------------------ 09 busy site (R1)
 
+BUSY_CLOUD_DIR = "data/pointclouds_gnss_busy"   # p3_render.py --sensor realistic --georef gnss --site busy
+MISPLACED_C, LATE_C = (0.08, 0.08, 0.08), np.array([0.55, 0.85, 0.95])
+
+
 def busy_site():
     import site_clutter as sc
     d = out_dir("09_busy_site")
@@ -831,6 +836,7 @@ def busy_site():
                      "z_min": float(v[:, 2].min()), "z_max": float(v[:, 2].max())}
     site = sc.Site(all_el)
     dev = sc.deviations(all_el.keys())
+    _late, moved = sc.late_and_misplaced(all_el, dev)
     ims, titles = [], []
     for s in ["05_01_eerste_verdieping_structure", "10_02_tweede_verdieping_interior"]:
         m = manifest(s)
@@ -844,14 +850,24 @@ def busy_site():
                 idx = np.unique(bim.faces[bim.tri_elem == bim.gid_index[g]])
                 e["verts"] = vv[idx]
                 els.append(e)
-        els = sc.apply_deviations(els, dev)
-        clutter = sc.stage_clutter(site, els, m["stage_index"], m["phase"], is_last=False)
-        vs, fs, cs, off = [], [], [], 0
+        # which elements are late at this stage (saved by p3 --site busy, eval only)
+        npz = os.path.join(BUSY_CLOUD_DIR, f"{s}.npz")
+        missing = set(np.load(npz)["gt_missing_ids"].tolist()) if os.path.exists(npz) else set()
+        els = sc.apply_deviations(els, {**dev, **moved})
+        clutter = sc.stage_clutter(site, [e for e in els if e["global_id"] not in missing],
+                                   m["stage_index"], m["phase"], is_last=False)
+        vs, fs, cs, gs, off = [], [], [], [], 0
         for e in els + clutter:
             vs.append(e["verts"])
+            if e["global_id"] in missing:   # late: not there yet, drawn as a ghost
+                gs.append(e["faces"] + off)
+                off += len(e["verts"])
+                continue
             fs.append(e["faces"] + off)
             off += len(e["verts"])
-            if e["global_id"] in dev:
+            if e["global_id"] in moved:
+                c = MISPLACED_C
+            elif e["global_id"] in dev:
                 c = (0.85, 0.1, 0.6)
             elif e["global_id"]:
                 c = PARTIAL if e["global_id"] in partial else BUILT
@@ -859,16 +875,19 @@ def busy_site():
                 c = np.array(sc.CLUTTER_COLOR[e["ifc_type"]]) / 255
             cs.append(np.tile(c, (len(e["faces"]), 1)))
         V, F, C = np.concatenate(vs), np.concatenate(fs), np.concatenate(cs)
-        ims.append(render(V, F, C, *view(bim, dist=3.0, el=30), 800, 560))
+        G = np.concatenate(gs) if gs else np.zeros((0, 3), int)
+        ims.append(render(V, F, C, *view(bim, dist=3.0, el=30), 800, 560, ghost_faces=G, ghost_color=LATE_C))
         titles.append(f"Stage {short(s)}")
         c0 = bim.center.copy()
         c0[2] = 3.0
-        ims.append(render(V, F, C, *view(bim, az=-70, el=20, dist=0.9, center=c0), 800, 560))
+        ims.append(render(V, F, C, *view(bim, az=-70, el=20, dist=0.9, center=c0), 800, 560,
+                          ghost_faces=G, ghost_color=LATE_C))
         titles.append(f"Stage {short(s)}, close-up")
     legend = [(k, np.array(c) / 255) for k, c in sc.CLUTTER_COLOR.items()] + \
-        [("built", BUILT), ("half built", PARTIAL), ("built 4-12 cm off design", (0.85, 0.1, 0.6))]
+        [("built", BUILT), ("half built", PARTIAL), ("built 4-12 cm off design", (0.85, 0.1, 0.6)),
+         ("built 0.6-1.5 m off (misplaced, black)", MISPLACED_C), ("late: scheduled, not there yet", LATE_C)]
     fig = panels(ims, titles, "Busy site (p3_render.py --site busy): things a real site has that the BIM "
-                 "does not, and a few elements built slightly off", legend, ncols=2, scale=0.9)
+                 "does not, elements built off design, and late ones", legend, ncols=2, scale=0.9)
     fig.savefig(os.path.join(d, "busy_site_world.png"), dpi=100)
     plt.close(fig)
     print("busy site done")

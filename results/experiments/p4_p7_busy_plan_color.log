@@ -1,0 +1,128 @@
+=== item 2: P4 -> P7 with plan_color on busy GPS clouds Fri Oct 30 01:37:13 AM IST 2026
+Loading cached BIM surface samples from data/bim/bim_surface_samples.npz...
+  1355 elements, 12934946 surface samples
+Sample tree memory: xyz 155.2MB, gid 1241.8MB
+
+00_m1_fundering_structure:
+  registration: coarse_score=0.2495, tight_fit=0.2178, color_fit=0.7920, runner_color_fit=0.6854, tight_ambiguity=0.7181, ambiguity=0.7181, fitness=0.3534, rmse=0.0506, tilt_deg=0.7621, scale=0.9970, shift_m=2.3658, n_color_dropped=5902, failed_checks=, ok=True
+  assigned 21537/91862 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  78 elements detected (>= 8 points each)
+
+01_m1_fundering_envelope:
+  registration: coarse_score=0.1989, tight_fit=0.2262, color_fit=0.7808, runner_color_fit=0.6224, tight_ambiguity=0.6939, ambiguity=0.6939, fitness=0.3851, rmse=0.0522, tilt_deg=0.1612, scale=0.9852, shift_m=0.6117, n_color_dropped=5271, failed_checks=, ok=True
+  assigned 24081/89821 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  121 elements detected (>= 8 points each)
+
+02_00_begane_grond_structure:
+  registration: coarse_score=0.2277, tight_fit=0.1846, color_fit=0.7553, runner_color_fit=0.7342, tight_ambiguity=0.6658, ambiguity=0.6658, fitness=0.2886, rmse=0.0513, tilt_deg=1.3314, scale=1.0026, shift_m=3.5475, n_color_dropped=7714, failed_checks=, ok=True
+  assigned 22478/146196 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  136 elements detected (>= 8 points each)
+
+03_00_begane_grond_envelope:
+  registration: coarse_score=0.2636, tight_fit=0.3071, color_fit=0.6865, runner_color_fit=nan, tight_ambiguity=0.0000, ambiguity=0.0000, fitness=0.5088, rmse=0.0511, tilt_deg=1.1483, scale=0.9872, shift_m=4.6365, n_color_dropped=6633, failed_checks=, ok=True
+  assigned 70702/171220 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  284 elements detected (>= 8 points each)
+
+04_00_begane_grond_interior:
+  registration: coarse_score=0.4047, tight_fit=0.3174, color_fit=0.6716, runner_color_fit=0.5123, tight_ambiguity=0.4299, ambiguity=0.4299, fitness=0.5298, rmse=0.0509, tilt_deg=1.5797, scale=0.9976, shift_m=2.2826, n_color_dropped=6529, failed_checks=, ok=True
+  assigned 74921/188189 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  325 elements detected (>= 8 points each)
+
+05_01_eerste_verdieping_structure:
+  registration: coarse_score=0.4014, tight_fit=0.3655, color_fit=0.7154, runner_color_fit=0.5971, tight_ambiguity=0.6850, ambiguity=0.6850, fitness=0.5466, rmse=0.0480, tilt_deg=0.5645, scale=0.9922, shift_m=3.0460, n_color_dropped=9137, failed_checks=, ok=True
+  assigned 101296/281006 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  407 elements detected (>= 8 points each)
+
+06_01_eerste_verdieping_envelope:
+  registration: coarse_score=0.5348, tight_fit=0.4084, color_fit=0.6888, runner_color_fit=0.5834, tight_ambiguity=0.6565, ambiguity=0.6565, fitness=0.6372, rmse=0.0501, tilt_deg=0.2811, scale=0.9980, shift_m=1.9574, n_color_dropped=8573, failed_checks=, ok=True
+  assigned 140606/306933 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  570 elements detected (>= 8 points each)
+
+07_01_eerste_verdieping_interior:
+  registration: coarse_score=0.4457, tight_fit=0.4014, color_fit=0.7004, runner_color_fit=0.5875, tight_ambiguity=0.6655, ambiguity=0.6655, fitness=0.6466, rmse=0.0506, tilt_deg=1.0094, scale=0.9897, shift_m=1.3061, n_color_dropped=7964, failed_checks=, ok=True
+  assigned 152906/319729 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  606 elements detected (>= 8 points each)
+
+08_02_tweede_verdieping_structure:
+  registration: coarse_score=0.5434, tight_fit=0.3893, color_fit=0.7173, runner_color_fit=0.6330, tight_ambiguity=0.6778, ambiguity=0.6778, fitness=0.6210, rmse=0.0499, tilt_deg=0.2742, scale=0.9990, shift_m=2.7307, n_color_dropped=8651, failed_checks=, ok=True
+  assigned 178504/354983 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  627 elements detected (>= 8 points each)
+
+09_02_tweede_verdieping_envelope:
+  registration: coarse_score=0.3270, tight_fit=0.4298, color_fit=0.6965, runner_color_fit=0.6139, tight_ambiguity=0.6131, ambiguity=0.6131, fitness=0.6828, rmse=0.0496, tilt_deg=1.1856, scale=1.0072, shift_m=2.3735, n_color_dropped=9549, failed_checks=, ok=True
+  assigned 204672/377217 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  742 elements detected (>= 8 points each)
+
+10_02_tweede_verdieping_interior:
+  registration: coarse_score=0.4505, tight_fit=0.4395, color_fit=0.6833, runner_color_fit=0.5992, tight_ambiguity=0.6216, ambiguity=0.6216, fitness=0.6864, rmse=0.0490, tilt_deg=2.1965, scale=0.9863, shift_m=1.4221, n_color_dropped=8343, failed_checks=gravity, ok=False
+  WARNING: registration failed its own checks (gravity) -- stage results are not trustworthy
+  assigned 219079/389825 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  759 elements detected (>= 8 points each)
+
+11_03_derde_verdieping_structure:
+  registration: coarse_score=0.4738, tight_fit=0.4837, color_fit=0.7369, runner_color_fit=0.6590, tight_ambiguity=0.5813, ambiguity=0.5813, fitness=0.7220, rmse=0.0478, tilt_deg=0.4993, scale=0.9824, shift_m=2.8176, n_color_dropped=9258, failed_checks=, ok=True
+  assigned 323643/529090 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  850 elements detected (>= 8 points each)
+
+12_03_derde_verdieping_envelope:
+  registration: coarse_score=0.3574, tight_fit=0.4708, color_fit=0.7686, runner_color_fit=nan, tight_ambiguity=0.0000, ambiguity=0.0000, fitness=0.7180, rmse=0.0488, tilt_deg=0.9761, scale=1.0104, shift_m=3.1720, n_color_dropped=9170, failed_checks=, ok=True
+  assigned 326908/528768 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  852 elements detected (>= 8 points each)
+
+13_03_derde_verdieping_interior:
+  registration: coarse_score=0.6376, tight_fit=0.4577, color_fit=0.7552, runner_color_fit=nan, tight_ambiguity=0.0000, ambiguity=0.0000, fitness=0.7290, rmse=0.0507, tilt_deg=0.5875, scale=0.9984, shift_m=1.9499, n_color_dropped=8009, failed_checks=, ok=True
+  assigned 340059/537888 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  899 elements detected (>= 8 points each)
+
+14_04_dak_structure:
+  registration: coarse_score=0.6216, tight_fit=0.4666, color_fit=0.7509, runner_color_fit=0.6691, tight_ambiguity=0.5749, ambiguity=0.5749, fitness=0.7289, rmse=0.0497, tilt_deg=1.0370, scale=0.9944, shift_m=5.4873, n_color_dropped=7894, failed_checks=, ok=True
+  assigned 356375/554380 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  932 elements detected (>= 8 points each)
+
+15_04_dak_envelope:
+  registration: coarse_score=0.6445, tight_fit=0.5801, color_fit=0.7418, runner_color_fit=0.6574, tight_ambiguity=0.5766, ambiguity=0.5766, fitness=0.9135, rmse=0.0499, tilt_deg=0.6969, scale=0.9881, shift_m=4.0368, n_color_dropped=1548, failed_checks=, ok=True
+  assigned 381915/498022 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  944 elements detected (>= 8 points each)
+
+Wrote matches for 16 stage(s) under data/matches/
+Loading cached BIM surface samples from data/bim/bim_surface_samples.npz...
+  1355 elements, 12934946 surface samples
+00_m1_fundering_structure: 78 detected; 1277 undetected, of which 1062 would have had >=30 points if built
+01_m1_fundering_envelope: 121 detected; 1234 undetected, of which 994 would have had >=30 points if built
+02_00_begane_grond_structure: 136 detected; 1219 undetected, of which 929 would have had >=30 points if built
+03_00_begane_grond_envelope: 284 detected; 1071 undetected, of which 756 would have had >=30 points if built
+04_00_begane_grond_interior: 325 detected; 1030 undetected, of which 683 would have had >=30 points if built
+05_01_eerste_verdieping_structure: 407 detected; 948 undetected, of which 616 would have had >=30 points if built
+06_01_eerste_verdieping_envelope: 570 detected; 785 undetected, of which 471 would have had >=30 points if built
+07_01_eerste_verdieping_interior: 606 detected; 749 undetected, of which 415 would have had >=30 points if built
+08_02_tweede_verdieping_structure: 627 detected; 728 undetected, of which 392 would have had >=30 points if built
+09_02_tweede_verdieping_envelope: 742 detected; 613 undetected, of which 270 would have had >=30 points if built
+10_02_tweede_verdieping_interior: 759 detected; 596 undetected, of which 223 would have had >=30 points if built
+11_03_derde_verdieping_structure: 850 detected; 505 undetected, of which 129 would have had >=30 points if built
+12_03_derde_verdieping_envelope: 852 detected; 503 undetected, of which 116 would have had >=30 points if built
+13_03_derde_verdieping_interior: 899 detected; 456 undetected, of which 78 would have had >=30 points if built
+14_04_dak_structure: 932 detected; 423 undetected, of which 27 would have had >=30 points if built
+15_04_dak_envelope: 944 detected; 411 undetected, of which 29 would have had >=30 points if built
+Coverage mask: per-stage visibility (>= 30 expected points)
+                            stage  progress_est_count  progress_est_volume  progress_gt_count  progress_gt_volume  error_count  error_volume  n_uncertain  n_completed  n_partial  n_not_started  signed_error_count  registration_ok  registration_err_m  n_rejected_few_points  n_missed_built  n_false_built  n_uncertain_built  n_uncertain_unbuilt  n_late  n_late_called_built  n_misplaced  n_misplaced_called_built  progress_cal_count  progress_lo_count  progress_hi_count  gt_in_range_count  progress_cal_volume  progress_lo_volume  progress_hi_volume  gt_in_range_volume
+        00_m1_fundering_structure            6.527158             7.004795           6.754386            6.756520     0.227228      0.248275          215           73          4           1063           -0.227228             True            0.009621                      1               3              3                  3                  212       3                    0            0                         0            6.725202           5.235714           8.214690               True             7.251846            1.830747           12.672945                True
+         01_m1_fundering_envelope            9.938903             8.067335           9.117081            7.296772     0.821822      0.770562          241          107         10            997            0.821822             True            0.016008                      3               1              6                 16                  225       5                    1            0                         0            9.477798           7.980361          10.975236               True             8.301356            2.878100           13.724611                True
+     02_00_begane_grond_structure           10.434203             9.654971          11.626388           12.179276     1.192185      2.524305          290          107         11            947           -1.192185             True            0.043302                     18              18             10                109                  181       7                    0            0                         0           11.697371          10.176179          13.218562               True            10.302578            4.871272           15.733883                True
+      03_00_begane_grond_envelope           24.803577            24.447996          23.477167           16.116537     1.326410      8.331459          315          246         32            762            1.326410             True            0.022660                      6              16              6                157                  158      12                    1            2                         0           23.122033          21.553712          24.690353               True            24.122553           18.443379           29.801726               False
+      04_00_begane_grond_interior           30.116715            29.631621          29.975364           21.876833     0.141351      7.754787          348          295         24            688            0.141351             True            0.029659                      5              24              4                190                  158      13                    1            3                         0           27.797955          26.215592          29.380319              False            28.862867           23.161336           34.564399               False
+05_01_eerste_verdieping_structure           36.550285            34.551556          37.008661           34.767173     0.458376      0.215617          332          368         17            638           -0.458376             True            0.035684                     22              18              3                229                  103       6                    0            3                         0           38.557230          36.996457          40.118003               True            35.623330           30.195640           41.051019                True
+ 06_01_eerste_verdieping_envelope           50.063459            39.633069          49.421923           39.085806     0.641536      0.547263          314          503         52            486            0.641536             True            0.025548                     15              13              5                247                   67       4                    0            6                         2           49.681577          48.101261          51.261893               True            39.695612           34.261414           45.129810                True
+ 07_01_eerste_verdieping_interior           55.981574            44.701113          55.551027           43.738198     0.430547      0.962914          335          559         32            429            0.430547             True            0.043356                     14              18              1                270                   65       5                    0            7                         0           54.220570          52.622354          55.818786               True            43.651919           38.194997           49.108842                True
+08_02_tweede_verdieping_structure           58.753998            56.066844          62.191474           56.028282     3.437476      0.038562          338          586         30            401           -3.437476             True            0.030096                      9              37              5                314                   24       2                    0            7                         0           63.132096          61.553698          64.710493               True            57.343975           51.893983           62.793966                True
+ 09_02_tweede_verdieping_envelope           69.516370            59.893852          70.899334           60.248693     1.382964      0.354841          344          683         48            280           -1.382964             True            0.020136                     10              20              5                318                   26       4                    0           11                         0           70.696719          69.102309          72.291129               True            60.783651           55.322997           66.244305                True
+ 10_02_tweede_verdieping_interior           74.525094            63.831171          76.208014           64.210541     1.682919      0.379370          374          717         37            227           -1.682919            False            0.015011                      4              22              5                343                   31       4                    0           11                         1           74.930875          73.331161          76.530588               True            63.760045           58.295626           69.224464                True
+ 11_03_derde_verdieping_structure           81.710920            71.576279          85.808543           73.043840     4.097623      1.467560          377          784         39            155           -4.097623             True            0.015262                     26              31              2                350                   27       6                    0           11                         0           86.038070          84.452659          87.623482               True            73.789041           67.446105           80.131978                True
+  12_03_derde_verdieping_envelope           83.989204            72.765820          87.827614           73.566351     3.838410      0.800531          389          795         40            131           -3.838410             True            0.023071                     15              29              4                361                   28       5                    0           11                         0           88.053176          86.469141          89.637212               True            74.434432           68.093277           80.775587                True
+  13_03_derde_verdieping_interior           87.814211            91.586624          93.857622           86.428690     6.043410      5.157934          378          839         51             87           -6.043410             True            0.020160                      9              53              3                365                   13       0                    0           12                         2           93.199281          91.573696          94.824866               True            92.134663           85.805967           98.463359                True
+              14_04_dak_structure           93.936548            97.274178          96.721816           98.246306     2.785268      0.972128          397          884         40             34           -2.785268             True            0.015677                      7              19              2                383                   14       1                    0           12                         0           97.157172          95.577771          98.736574               True            99.037393           93.514053          104.560733                True
+               15_04_dak_envelope           94.179050            97.037463          99.072165           99.768929     4.893115      2.731466          385          902         30             38           -4.893115             True            0.013477                      9              29              0                381                    4       1                    0           12                         0           98.473320          96.925910         100.020729               True            99.041799           93.493874          104.589723                True
+
+Wrote results/main_table.csv
+Wrote results/figures/p7_progress_error.png
+=== item 2 done Fri Oct 30 02:37:13 AM IST 2026
+=== all done Fri Oct 30 03:32:29 AM IST 2026
