@@ -16,7 +16,7 @@ import numpy as np
 import ifcopenshell
 import ifcopenshell.geom
 
-IFC_PATH = "data/raw/schependomlaan/Design model IFC/IFC Schependomlaan.ifc"
+IFC_PATH = "data/ifc/IFC Schependomlaan.ifc"
 OUT_JS = "results/pointcloud_viewer_data.js"
 
 # class -> (display color hex-as-rgb, label)

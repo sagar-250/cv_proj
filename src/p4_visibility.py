@@ -57,7 +57,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 import p2_p3_simulate_stages as sim  # noqa: E402
 from p4_match_bim import ASSIGN_K, ASSIGN_MARGIN, build_bim_sample_tree  # noqa: E402
 
-IFC_PATH = "data/raw/schependomlaan/Design model IFC/IFC Schependomlaan.ifc"
+IFC_PATH = "data/ifc/IFC Schependomlaan.ifc"
 MESH_CACHE = "data/bim/bim_meshes.npz"
 POINTCLOUD_DIR = "data/pointclouds"
 MATCHES_DIR = "data/matches"

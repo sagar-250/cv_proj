@@ -65,7 +65,7 @@ from p2_p3_simulate_stages import (  # noqa: E402
     REG_JITTER_T, REG_JITTER_DEG,
 )
 
-IFC_PATH = "data/raw/schependomlaan/Design model IFC/IFC Schependomlaan.ifc"
+IFC_PATH = "data/ifc/IFC Schependomlaan.ifc"
 STATES_DIR = "data/states"
 OUT_JS = "results/pointcloud_viewer_data.js"
 TARGET_POINTS_OUT = 55_000
@@ -472,6 +472,9 @@ def main():
 
     if args.out != "data/pointclouds":
         print(f"\n--out given: left {OUT_JS} unchanged (it shows the default run)")
+        return
+    if not os.path.exists(OUT_JS):   # made by export_pointcloud_viewer_data.py; not needed for the clouds
+        print(f"\n{OUT_JS} not found: viewer not updated (run export_pointcloud_viewer_data.py first)")
         return
     with open(OUT_JS, encoding="utf-8") as fh:
         txt = fh.read()

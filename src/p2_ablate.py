@@ -39,7 +39,7 @@ import pandas as pd
 import ifcopenshell
 import ifcopenshell.geom
 
-IFC_PATH = "data/raw/schependomlaan/Design model IFC/IFC Schependomlaan.ifc"
+IFC_PATH = "data/ifc/IFC Schependomlaan.ifc"
 CSV_PATH = "data/bim/bim_complete.csv"
 STATES_DIR = "data/states"
 

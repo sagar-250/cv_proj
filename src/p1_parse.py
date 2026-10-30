@@ -21,7 +21,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-IFC_PATH = "data/raw/schependomlaan/Design model IFC/IFC Schependomlaan.ifc"
+IFC_PATH = "data/ifc/IFC Schependomlaan.ifc"
 OUT_CSV = "data/bim/bim_complete.csv"
 OUT_PLOT = "results/p1_centroids.png"
 

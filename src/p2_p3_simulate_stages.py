@@ -57,7 +57,7 @@ import ifcopenshell
 import ifcopenshell.geom
 import open3d as o3d
 
-IFC_PATH = "data/raw/schependomlaan/Design model IFC/IFC Schependomlaan.ifc"
+IFC_PATH = "data/ifc/IFC Schependomlaan.ifc"
 OUT_JS = "results/pointcloud_viewer_data.js"
 
 N_STAGES = 8

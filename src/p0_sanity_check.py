@@ -8,7 +8,7 @@ Run: .venv/Scripts/python.exe src/p0_sanity_check.py
 """
 import ifcopenshell
 
-DESIGN_IFC = "data/raw/schependomlaan/Design model IFC/IFC Schependomlaan.ifc"
+DESIGN_IFC = "data/ifc/IFC Schependomlaan.ifc"
 WEEK28_IFC = (
     "data/raw/schependomlaan/As Planned models/"
     "Week 28 10 july IFC Schependomlaan incl planningsdata.ifc"
