@@ -1,0 +1,2 @@
+stage,progress_est_count,progress_est_volume,progress_gt_count,progress_gt_volume,error_count,error_volume,n_uncertain,n_completed,n_partial,n_not_started,signed_error_count,registration_ok,registration_err_m,n_rejected_few_points,n_missed_built,n_false_built,n_uncertain_built,n_uncertain_unbuilt,n_late,n_late_called_built,n_misplaced,n_misplaced_called_built
+15_04_dak_envelope,66.30953998087975,57.6277823513955,100.0,100.0,33.69046001912025,42.3722176486045,447,572,85,251,-33.69046001912025,True,0.20849146474869965,16,251,0,447,0,0,0,0,0

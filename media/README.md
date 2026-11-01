@@ -27,6 +27,7 @@ Images are PNG, animations are GIF (they play in any browser or image viewer), a
 | [progress_error_per_stage_all_versions.png](01_results_charts/progress_error_per_stage_all_versions.png) | The same error, stage by stage, with one line per version. The old pipeline was always too low, because it missed half-built walls. |
 | [progress_estimate_vs_truth_old_vs_new.png](01_results_charts/progress_estimate_vs_truth_old_vs_new.png) | The estimated progress curve next to the true one, for the old and the current pipeline. |
 | [error_sources_current.png](01_results_charts/error_sources_current.png) | For the current pipeline, which elements it gets wrong at each stage: built ones it called "not started", unbuilt ones it called "built", and built ones it left out as "unsure". |
+| [improvement_ladder.png](01_results_charts/improvement_ladder.png) | **What each change did.** Top: on the hardest world (realistic sensor, busy site, GPS offsets, late and misplaced elements), the full pipeline and what happens when one change is taken away at a time. The old ICP registration gives 40 points of error and never warns. Middle: the same pipeline as the world gets harder. Bottom: how the pipeline improved on the easy world. Numbers: `results/improvement_ladder.csv`. |
 | [registration_error_per_stage_current.png](01_results_charts/registration_error_per_stage_current.png) | How well each scan was lined up with the design model. It's within about 1–3 cm at every stage, even though the scans started metres off. |
 
 ## 02. Ground truth: the construction stages
@@ -114,6 +115,16 @@ Made by `make_media.py --only colors`. Uses the colour clouds in `data/pointclou
 | [bench_errors.png](10_materials_color/bench_errors.png) | The colour registration benchmark: `plan` vs `plan_color` (with coloured-ICP finish) vs `plan_color_rank` vs `plan_color_wrongcat` (deliberately wrong material catalogue), error per case. All 48 runs passed (under 5 cm), none failed silently; the three methods give about the same error, because colour never had to decide (geometry always had a clear winner). A first version let colour overrule clear geometry, and with the wrong catalogue it put stage 00 3.3 m off without a warning (`results/experiments/r3_bench_color_v0_ungated.csv`). Now colour only breaks near-ties. |
 
 Note: 50 of the 51 hardwood elements in the IFC have no geometry (they are never in any scan), so the charts count only elements with geometry.
+
+## 11. COLMAP: a cloud made from drone photos (new)
+
+Made by `make_media.py --only sfm` from `src/sfm_experiment.py` (one stage so far, the final one).
+
+| File | What it shows |
+|---|---|
+| [drone_photos.png](11_colmap_photogrammetry/drone_photos.png) | Four of the 60 simulated drone photos COLMAP gets as input. |
+| [colmap_cloud_vs_ideal.png](11_colmap_photogrammetry/colmap_cloud_vs_ideal.png) | The cloud COLMAP builds from those photos (left: camera colour, middle: distance to the design), next to the perfect cloud from the same photos (right). Facades come out well. Windows are holes, roof edges get a halo of stray points, and the ground is red because it is not part of the design. |
+| [progress_by_cloud_source.png](11_colmap_photogrammetry/progress_by_cloud_source.png) | The same pipeline on three kinds of cloud: raycast with indoor scans, the perfect cloud from the drone photos, and COLMAP's cloud. The dashed line is the true progress. |
 
 ## Other viewers already in the project
 

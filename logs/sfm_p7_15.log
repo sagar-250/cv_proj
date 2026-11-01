@@ -1,0 +1,6 @@
+Coverage mask: per-stage visibility (>= 30 expected points)
+             stage  progress_est_count  progress_est_volume  progress_gt_count  progress_gt_volume  error_count  error_volume  n_uncertain  n_completed  n_partial  n_not_started  signed_error_count  registration_ok  registration_err_m  n_rejected_few_points  n_missed_built  n_false_built  n_uncertain_built  n_uncertain_unbuilt  n_late  n_late_called_built  n_misplaced  n_misplaced_called_built
+15_04_dak_envelope           64.707054             56.38121              100.0               100.0    35.292946      43.61879          454          553         85            263          -35.292946             True              0.3281                     15             263              0                454                    0       0                    0            0                         0
+
+Wrote results/experiments/main_table_sfm.csv
+Wrote results/figures/p7_progress_error_sfm.png

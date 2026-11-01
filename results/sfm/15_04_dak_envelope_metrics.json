@@ -1,0 +1,21 @@
+{
+ "median_dist_true_fit_m": 0.0373668298125267,
+ "share_within_5cm_true_fit": 0.5878258443308578,
+ "share_within_10cm_true_fit": 0.7253705913432712,
+ "completeness_within_10cm_true_fit": 0.4476299545789821,
+ "stage": "15_04_dak_envelope",
+ "cloud": "dense",
+ "n_points": 487106,
+ "n_images": 60,
+ "n_images_total": 60,
+ "camera_fit_rms_to_gnss_m": 3.1249028276497675,
+ "scale_to_survey": 8.984274595045312,
+ "camera_pos_error_m": 0.3934379851354554,
+ "median_dist_to_surface_m": 0.06840118765830994,
+ "p90_dist_to_surface_m": 1.391353964805603,
+ "share_within_5cm": 0.4261985756079559,
+ "share_within_10cm": 0.612187986416788,
+ "share_points_near_building": 0.6897944184633324,
+ "surface_seen_by_cameras_m2_share": 0.25759,
+ "completeness_within_10cm_of_seen_surface": 0.358612523778097
+}

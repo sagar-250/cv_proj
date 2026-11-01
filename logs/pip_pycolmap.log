@@ -1,0 +1,19 @@
+Collecting pycolmap-cuda12
+  Downloading pycolmap_cuda12-4.2.1-cp310-cp310-manylinux_2_28_x86_64.whl.metadata (11 kB)
+Requirement already satisfied: numpy in ./.venv/lib/python3.10/site-packages (from pycolmap-cuda12) (2.2.6)
+Collecting cuda-toolkit<13,>=12 (from cuda-toolkit[cudart,curand]<13,>=12->pycolmap-cuda12)
+  Downloading cuda_toolkit-12.9.2.0-py2.py3-none-any.whl.metadata (14 kB)
+Collecting nvidia-curand-cu12==10.3.10.19.* (from cuda-toolkit[cudart,curand]<13,>=12->pycolmap-cuda12)
+  Downloading nvidia_curand_cu12-10.3.10.19-py3-none-manylinux_2_27_x86_64.whl.metadata (1.7 kB)
+Collecting nvidia-cuda-runtime-cu12==12.9.79.* (from cuda-toolkit[cudart,curand]<13,>=12->pycolmap-cuda12)
+  Downloading nvidia_cuda_runtime_cu12-12.9.79-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (1.7 kB)
+Downloading pycolmap_cuda12-4.2.1-cp310-cp310-manylinux_2_28_x86_64.whl (72.9 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 72.9/72.9 MB 318.8 kB/s  0:03:49
+Downloading cuda_toolkit-12.9.2.0-py2.py3-none-any.whl (2.4 kB)
+Downloading nvidia_cuda_runtime_cu12-12.9.79-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (3.5 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.5/3.5 MB 298.0 kB/s  0:00:11
+Downloading nvidia_curand_cu12-10.3.10.19-py3-none-manylinux_2_27_x86_64.whl (68.3 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 68.3/68.3 MB 296.2 kB/s  0:03:38
+Installing collected packages: cuda-toolkit, nvidia-curand-cu12, nvidia-cuda-runtime-cu12, pycolmap-cuda12
+
+Successfully installed cuda-toolkit-12.9.2.0 nvidia-cuda-runtime-cu12-12.9.79 nvidia-curand-cu12-10.3.10.19 pycolmap-cuda12-4.2.1

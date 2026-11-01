@@ -1,0 +1,10 @@
+Loading cached BIM surface samples from data/bim/bim_surface_samples.npz...
+  1355 elements, 12934946 surface samples
+Sample tree memory: xyz 155.2MB, gid 1241.8MB
+
+07_01_eerste_verdieping_interior:
+  registration: coarse_score=0.8428, tight_fit=0.6950, ambiguity=0.4457, fitness=1.0000, rmse=0.0455, tilt_deg=0.2523, scale=1.0162, shift_m=3.7406, failed_checks=, ok=True
+  assigned 718462/829468 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  647 elements detected (>= 8 points each)
+
+Wrote matches for 1 stage(s) under data/matches_sfm_ideal/

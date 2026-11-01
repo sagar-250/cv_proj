@@ -1,0 +1,10 @@
+Loading cached BIM surface samples from data/bim/bim_surface_samples.npz...
+  1355 elements, 12934946 surface samples
+Sample tree memory: xyz 155.2MB, gid 1241.8MB
+
+15_04_dak_envelope:
+  registration: coarse_score=0.9543, tight_fit=0.7301, ambiguity=0.0000, fitness=1.0000, rmse=0.0441, tilt_deg=0.0118, scale=0.9944, shift_m=2.2082, failed_checks=, ok=True
+  assigned 1140372/1269876 points to a known BIM element (threshold 0.08m, margin 0.04m)
+  964 elements detected (>= 8 points each)
+
+Wrote matches for 1 stage(s) under data/matches_sfm_ideal/

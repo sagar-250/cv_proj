@@ -1215,9 +1215,162 @@ def flow():
     print("flow done")
 
 
+# ------------------------------------------------------------------ 11 COLMAP experiment
+
+def _sfm_cloud(tag, stage):
+    """A stage cloud from the COLMAP experiment (tag "sfm" or "sfm_ideal"), placed on the design with
+    the pipeline's own estimated registration."""
+    d = np.load(f"data/pointclouds_{tag}/{stage}.npz")
+    T = np.array(json.load(open(f"data/matches_{tag}/{stage}/registration.json"))["T_cloud_to_bim"])
+    xyz = d["xyz"].astype(np.float64)
+    return xyz @ T[:3, :3].T + T[:3, 3], d["rgb"] / 255.0
+
+
+def _dist_color(dist):
+    """green < 3 cm, yellow ~ 6 cm, red > 12 cm from the design surface"""
+    t = np.clip(dist / 0.12, 0, 1)[:, None]
+    return np.where(t < 0.5, (2 * t) * np.array([0.95, 0.85, 0.1]) + (1 - 2 * t) * np.array([0.1, 0.65, 0.25]),
+                    (2 * t - 1) * np.array([0.85, 0.1, 0.1]) + (2 - 2 * t) * np.array([0.95, 0.85, 0.1]))
+
+
+def sfm_media():
+    d = out_dir("11_colmap_photogrammetry")
+    bim = Bim()
+    stage = "15_04_dak_envelope"
+    imgs = [np.asarray(Image.open(f"data/sfm/{stage}/images/img_{i:03d}.jpg").resize((640, 480))) for i in (0, 20, 41, 58)]
+    fig = panels(imgs, ["photo 1", "photo 21", "photo 42", "photo 59"],
+                 "Simulated drone photos of the final stage (60 photos, 3 altitude rings; the input to COLMAP)",
+                 ncols=2, scale=0.9)
+    fig.savefig(os.path.join(d, "drone_photos.png"), dpi=100)
+    plt.close(fig)
+
+    clouds = {"colmap": _sfm_cloud("sfm", stage), "ideal": _sfm_cloud("sfm_ideal", stage)}
+    empty = np.zeros((0, 3), int)
+    ims, titles = [], []
+    for az in (-55, 125):
+        eye, target = view(bim, az=az, el=28, dist=2.5)
+        for key, mode in (("colmap", "colour"), ("colmap", "dist"), ("ideal", "dist")):
+            xyz, rgb = clouds[key]
+            sel = np.arange(len(xyz))[::2 if key == "ideal" else 1]
+            xyz, rgb = xyz[sel], rgb[sel]
+            col = rgb if mode == "colour" else _dist_color(_closest(bim, xyz)[0])
+            ims.append(render(bim.verts, empty, np.zeros((0, 3)), eye, target, 640, 460, ghost_faces=bim.faces,
+                              points=[(xyz, col, 2, False)]))
+            titles.append({("colmap", "colour"): "COLMAP cloud (camera colour)",
+                           ("colmap", "dist"): "COLMAP cloud, distance to design",
+                           ("ideal", "dist"): "ideal cloud from the same photos"}[(key, mode)])
+    legend = [("< 3 cm from the design surface", _dist_color(np.array([0.0]))[0]),
+              ("6 cm", _dist_color(np.array([0.06]))[0]), ("> 12 cm", _dist_color(np.array([0.2]))[0])]
+    fig = panels(ims, titles, f"Drone photos -> COLMAP -> cloud, stage {short(stage)}, placed on the design by our registration",
+                 legend, ncols=3, scale=0.85)
+    fig.savefig(os.path.join(d, "colmap_cloud_vs_ideal.png"), dpi=100)
+    plt.close(fig)
+
+    rows = []
+    for tag, name in (("sfm", "COLMAP cloud (drone photos)"), ("sfm_ideal", "ideal cloud, same photos"),):
+        f = f"results/experiments/main_table_{tag}.csv"
+        if os.path.exists(f):
+            t = pd.read_csv(f)
+            for _, r in t.iterrows():
+                rows.append((r["stage"], name, r["progress_est_count"], r["progress_gt_count"]))
+    ref = pd.read_csv("results/experiments/main_table_13_busy_late_misplaced_rule_on.csv").set_index("stage")
+    for st in sorted({r[0] for r in rows}):
+        rows.append((st, "raycast, drone + indoor scans", ref.loc[st, "progress_est_count"], ref.loc[st, "progress_gt_count"]))
+    fig, ax = plt.subplots(figsize=(9, 4.6))
+    stages = sorted({r[0] for r in rows})
+    names = ["raycast, drone + indoor scans", "ideal cloud, same photos", "COLMAP cloud (drone photos)"]
+    cols = ["#4a8f5c", "#2f6690", "#ef8354"]
+    for k, (n, c) in enumerate(zip(names, cols)):
+        vals = [next((r[2] for r in rows if r[0] == st and r[1] == n), np.nan) for st in stages]
+        ax.bar(np.arange(len(stages)) + (k - 1) * 0.26, vals, 0.26, label=n, color=c)
+        for i, v in enumerate(vals):
+            ax.text(i + (k - 1) * 0.26, v + 1, f"{v:.0f}", ha="center", fontsize=8)
+    for i, st in enumerate(stages):
+        gt = next(r[3] for r in rows if r[0] == st)
+        ax.plot([i - 0.45, i + 0.45], [gt, gt], "k--", lw=1)
+    ax.plot([], [], "k--", label="true progress")
+    ax.set_xticks(np.arange(len(stages)))
+    ax.set_xticklabels([short(s) for s in stages])
+    ax.set_ylabel("estimated progress % (count)")
+    ax.set_ylim(0, 130)
+    ax.legend(fontsize=8, loc="upper center", ncol=2)
+    ax.set_title("Same pipeline, three kinds of cloud")
+    fig.tight_layout()
+    fig.savefig(os.path.join(d, "progress_by_cloud_source.png"), dpi=120)
+    plt.close(fig)
+    print("colmap media done")
+
+
+# ------------------------------------------------------------------ 12 what each change did
+
+def ladder():
+    """Table + chart of what each change did (reads the result tables in results/experiments/)."""
+    E = "results/experiments/"
+    f = {  # label, table, group
+        "A": [("Full pipeline (all changes)", "main_table_13_busy_late_misplaced_rule_on.csv"),
+              ("... with plan_color registration", "main_table_14_busy_late_misplaced_plan_color.csv"),
+              ("... without the 10%-of-expected-points rule", "main_table_12_busy_late_misplaced_rule_off.csv"),
+              ("... old 'detected at final stage' rule instead of visibility check", "main_table_busy_old_mask.csv"),
+              ("... old ICP registration", "main_table_busyold.csv")],
+        "B": [("Easy world (simple sensor, clean site)", "main_table_4_gnss_plan_v2.csv"),
+              ("+ realistic sensor", "main_table_9_realistic_fixed_rule_on.csv"),
+              ("+ busy site (scaffold, crane, workers, off-design elements)", "main_table_11_busy_realistic_rule_on.csv"),
+              ("+ late and misplaced elements", "main_table_13_busy_late_misplaced_rule_on.csv")],
+        "C": [("First pipeline", "main_table_0_before.csv"), ("+ half-built wall fix", "main_table_1_clipfix.csv"),
+              ("+ visibility check", "main_table_2_clipfix_visibility.csv"),
+              ("+ GPS-sized offsets, new registration", "main_table_4_gnss_plan_v2.csv")],
+    }
+    rows = []
+    for g, items in f.items():
+        for label, name in items:
+            if not os.path.exists(E + name):
+                continue
+            d = pd.read_csv(E + name)
+            row = {"group": g, "step": label, "mean_error": d.error_count.mean(), "worst_error": d.error_count.max(),
+                   "mean_error_volume": d.error_volume.mean(), "table": name}
+            for k in ("n_missed_built", "n_false_built"):
+                row[k] = int(d[k].sum()) if k in d else np.nan
+            rows.append(row)
+    cal = pd.read_csv(E + "main_table_13_busy_late_misplaced_rule_on.csv")
+    if "progress_cal_count" in cal:
+        rows.insert(1, {"group": "A", "step": "... + error-bar correction (R5)",
+                        "mean_error": (cal.progress_cal_count - cal.progress_gt_count).abs().mean(),
+                        "worst_error": (cal.progress_cal_count - cal.progress_gt_count).abs().max(),
+                        "mean_error_volume": (cal.progress_cal_volume - cal.progress_gt_volume).abs().mean(),
+                        "n_missed_built": np.nan, "n_false_built": np.nan,
+                        "table": "main_table_13_busy_late_misplaced_rule_on.csv"})
+    df = pd.DataFrame(rows)
+    df.to_csv("results/improvement_ladder.csv", index=False)
+    d = out_dir("01_results_charts")
+    titles = {"A": "On the hardest world: take one change away at a time", "B": "Same pipeline, the world gets harder",
+              "C": "How the pipeline got better (easy world)"}
+    fig, axes = plt.subplots(3, 1, figsize=(11, 10), gridspec_kw={"height_ratios": [df.group.eq(g).sum() for g in "ABC"]})
+    CAP = 12.0
+    for ax, g in zip(axes, "ABC"):
+        t = df[df.group == g].iloc[::-1]
+        vals = t.mean_error.clip(upper=CAP)
+        colors = ["#4a8f5c" if g != "C" else "#2f6690"] * len(t)
+        ax.barh(t.step, vals, color=colors)
+        for y, (v, w, lab) in enumerate(zip(t.mean_error, t.worst_error, t.step)):
+            if v > CAP:   # bar is cut at the scale limit: label inside it
+                ax.text(0.2, y, f"{v:.1f}  (worst stage {w:.1f})  -- bar cut, off the scale", va="center",
+                        fontsize=8, color="white")
+            else:
+                ax.text(v + 0.15, y, f"{v:.1f}  (worst stage {w:.1f})", va="center", fontsize=8)
+        ax.set_xlim(0, CAP + 5)
+        ax.set_title(titles[g], fontsize=10, loc="left")
+        ax.tick_params(axis="y", labelsize=8)
+    axes[-1].set_xlabel("average progress error over the 16 stages (percentage points, count-weighted)")
+    fig.tight_layout()
+    fig.savefig(os.path.join(d, "improvement_ladder.png"), dpi=120)
+    plt.close(fig)
+    print(df.round(2).to_string(index=False))
+    print("ladder done")
+
+
 SECTIONS = {"flow": flow, "charts": charts, "truth": truth, "scans": scans, "sensor": sensor, "clip": clip,
             "registration": registration_media, "visibility": visibility, "errors": errors, "models": models,
-            "site": busy_site, "colors": colors_media}
+            "site": busy_site, "colors": colors_media, "sfm": sfm_media, "ladder": ladder}
 
 
 def main():

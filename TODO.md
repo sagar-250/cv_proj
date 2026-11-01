@@ -17,7 +17,10 @@ Order: R0 -> R2 -> R3 -> R1 -> R4 -> R5 -> R6 -> R7 (R1 can run alongside R2).
 - [ ] Render real-looking images (textures, light, shadows, blur) from the BIM
   - [x] First step: camera colour per point (`p3_render.py --color material`, now the default). Material from the IFC (`src/materials.py` -> `data/bim/bim_materials.csv`, 16 categories), rendered with its own colour table, per-element tint, brick/block courses, sun + shadows, exposure, dirt, 6% of elements built from another material. Still a coloured raycast, not photos
 - [ ] Realistic drone flight paths with pose noise and coverage gaps
-- [ ] Build the cloud from the images with COLMAP/OpenMVS (SfM)
+- [x] Build the cloud from the images with COLMAP (`src/sfm_experiment.py`, pycolmap + GPU dense): one-stage experiment done. Final stage: 60 photos, all registered, 487k points, 3.7 cm median error; through our pipeline progress 64.7% vs 94.0% for a perfect cloud from the same photos and 100% true. Cause: windows, thin parts and edges are lost, noise is bigger than the raycast sensor's
+  - [x] Second stage (07): COLMAP 51.0% vs 56.4% true (error 5.3), perfect cloud from the same photos 57.5% vs 58.0%
+  - [ ] More/closer/oblique photos, outlier filtering of the COLMAP cloud, why the finished building does so much worse (35 points off), then more stages
+  - [ ] Mixed drone-only coverage: where do the missing elements sit (interior, floors seen through openings)
 - [x] Add a LiDAR-style sensor with range-dependent noise (`p3_render.py --sensor realistic`: range/angle noise, grazing dropout, holes, edge ghosts, floaters). Run through the pipeline: mean error 0.8 -> 1.7, registration still within 3.3 cm (`main_table_8/9`)
 - [x] Survey-sized alignment offsets (`p3_render.py --georef gnss|local`)
 - Done when: one stage goes images -> SfM -> cloud, and its errors are compared with a real cloud

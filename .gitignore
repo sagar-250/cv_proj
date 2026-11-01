@@ -24,3 +24,7 @@ data/dart/
 # tagged experiment runs (RUN_TAG): regenerable
 data/matches_interior*/
 data/status_interior*/
+
+# SfM experiment (regenerable: src/sfm_experiment.py)
+data/sfm/
+data/pointclouds_busyold

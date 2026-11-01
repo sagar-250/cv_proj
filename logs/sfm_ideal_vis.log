@@ -1,0 +1,3 @@
+Loading cached BIM surface samples from data/bim/bim_surface_samples.npz...
+  1355 elements, 12934946 surface samples
+15_04_dak_envelope: 964 detected; 391 undetected, of which 2 would have had >=30 points if built

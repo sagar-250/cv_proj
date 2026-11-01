@@ -1,0 +1,15 @@
+group,step,mean_error,worst_error,mean_error_volume,table,n_missed_built,n_false_built
+A,Full pipeline (all changes),1.9523599184301048,5.749115474094623,2.2427260848676442,main_table_13_busy_late_misplaced_rule_on.csv,327.0,68.0
+A,... + error-bar correction (R5),0.6904713812737407,1.954064852375648,2.0848185313104124,main_table_13_busy_late_misplaced_rule_on.csv,,
+A,... with plan_color registration,2.087539959068799,6.04341025520506,2.0785984898891527,main_table_14_busy_late_misplaced_plan_color.csv,351.0,64.0
+A,... without the 10%-of-expected-points rule,1.631514703587031,5.12484114453855,6.391951262098334,main_table_12_busy_late_misplaced_rule_off.csv,263.0,160.0
+A,... old 'detected at final stage' rule instead of visibility check,3.2057265724666895,8.27633194457077,5.698382053513377,main_table_busy_old_mask.csv,658.0,160.0
+A,... old ICP registration,40.089429405887,74.09889947452459,30.563125331050337,main_table_busyold.csv,6921.0,382.0
+B,"Easy world (simple sensor, clean site)",0.7940440458323448,3.639168317743014,2.0668208092754643,main_table_4_gnss_plan_v2.csv,98.0,50.0
+B,+ realistic sensor,1.6948374445828465,5.489424024982171,2.165012074558362,main_table_9_realistic_fixed_rule_on.csv,276.0,32.0
+B,"+ busy site (scaffold, crane, workers, off-design elements)",1.7561190870241596,5.004465236020181,2.0999390989600104,main_table_11_busy_realistic_rule_on.csv,308.0,67.0
+B,+ late and misplaced elements,1.9523599184301048,5.749115474094623,2.2427260848676442,main_table_13_busy_late_misplaced_rule_on.csv,327.0,68.0
+C,First pipeline,4.755888261903916,7.890396693483765,2.816622212144353,main_table_0_before.csv,,
+C,+ half-built wall fix,2.048073137548265,4.602748474803235,1.9425517792001104,main_table_1_clipfix.csv,387.0,45.0
+C,+ visibility check,1.5260341765070229,4.229535194966928,2.0213352701859195,main_table_2_clipfix_visibility.csv,276.0,45.0
+C,"+ GPS-sized offsets, new registration",0.7940440458323448,3.639168317743014,2.0668208092754643,main_table_4_gnss_plan_v2.csv,98.0,50.0
