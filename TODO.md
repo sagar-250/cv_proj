@@ -95,3 +95,7 @@ Order: R0 -> R2 -> R3 -> R1 -> R4 -> R5 -> R6 -> R7 (R1 can run alongside R2).
 ## Ideas for later
 - [ ] Material recognition from texture: camera colour changes with light, exposure and material mix, so raw colour is a weak cue. Train an ML model that looks at a small image/texture patch and says which material it probably is. Then check it against the material the BIM says the element it was matched to should be (agrees / disagrees), as extra evidence for matching and for "built as designed".
 - [ ] Use colour registration for scan-to-scan merging: when the same building is scanned in two runs (two flights, or two survey days), align the two clouds with each other. Colour should help more here than against the BIM, since both clouds show the same real surfaces and materials.
+- [x] End-term presentation made (`results/presentation/BIM_Progress_Monitoring_EndTerm.pptx`); names, guide and date still to add on the title slide
+- [x] Project report made (`report.pdf`); regenerate with `src/make_report.py` after results change
+- [ ] Indoor COLMAP follow-up: denser or continuous walk so photos link up, then registration of partial indoor clouds (it failed silently at 11.75 m; a stricter ambiguity flag or a second look-alike test is needed)
+- [ ] Check the indoor scanner height quirk: ground-floor scanners stand at z = 0.0 because the 1.5 m level merge swallows the ground slab (see PROGRESS 2026-11-02)
