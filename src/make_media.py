@@ -491,7 +491,7 @@ def sensor():
           *sim.make_trees(fc, fr, float(allv[:, 2].min()), clutter_rng))
     out = {}
     for mode in ["simple", "realistic"]:
-        p3.SENSOR, p3.GEOREF = mode, "small"
+        p3.SENSOR, p3.GEOREF, p3.COLOR = mode, "small", "class"   # (points don't depend on the colour model)
         rng = np.random.default_rng(p3.SEED + 1000 + m["stage_index"])
         els = p3.stage_elements_from_manifest(m, all_el, rng)
         pts, col, cls, _gid, *_rest, T, _e, _k, _t = p3.run_stage(els, rng, gt)
