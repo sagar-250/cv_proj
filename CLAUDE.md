@@ -27,6 +27,7 @@ python src/p4_eval_segment.py        # scores p4_segment against held-out GT
 python src/sfm_experiment.py --stage NAME [--step render|colmap|dense|cloud|ideal|all] [--no-dense]  # COLMAP experiment: drone photos -> pycolmap (sparse + GPU dense) -> data/pointclouds_sfm/ ; then RUN_TAG=sfm p4/p4_visibility/p7
 python src/make_presentation.py      # -> results/presentation/*.pptx
 python src/make_media.py [--only charts,truth,...]  # -> media/ pictures, GIFs, PLY files (index: media/README.md)
+python src/make_live_demo.py         # -> results/live_demo.html: 8-step browser demo (material render, clean/busy site, simple/realistic sensor, ray-cast scan, plan registration from any heading, colour clutter filter, matching, visibility, scoring + R5 range); recorded runs (full pipeline, COLMAP, DART) shown only when their data is in the repo; algorithms in src/live_demo_core.js (JS port, browser-sized), page in src/live_demo_page.html; `node src/live_demo_check.js` re-checks registration
 ```
 
 Run order is the phase order; every phase communicates with the next only through files on disk. `--stage NAME` takes a stage directory name such as `05_01_eerste_verdieping_structure`. Only the design IFC is needed for P1-P7 (`data/ifc/IFC Schependomlaan.ifc`, 49 MB, committed: a copy from the Schependomlaan dataset, CC BY 4.0, credit in `data/ifc/README.md`); P3/P4 take minutes and ~4 GB RAM on this 11 GB machine, so don't run two P4-sized jobs at once. Keep before/after result tables in `results/experiments/` when changing the pipeline.

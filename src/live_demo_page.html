@@ -1,0 +1,990 @@
+<title>Schependomlaan Live Scan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one live 3D viewport; a step rail on the left, a "what is happening" card below it, and an instrument panel on the right. Phone: viewport on top, panels stacked under it. */
+:root {
+  --bg: #04070d; --panel: rgba(7, 13, 23, 0.82); --line: rgba(110, 200, 255, 0.16); --line2: rgba(110, 200, 255, 0.34);
+  --fg: #dce8f4; --muted: #8296ab; --cyan: #5fe0ff; --orange: #ff5fb4;
+  --ok: #3ddc97; --part: #ffb547; --none: #56677c; --unc: #a98bff; --bad: #ff5d6c;
+  --display: 'Oxanium', 'Segoe UI', system-ui, sans-serif; --body: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif; --mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 14px; overflow: hidden; }
+.app { position: relative; height: 100%; }
+#view { position: absolute; inset: 0; }
+#view canvas { display: block; width: 100%; height: 100%; }
+.scan-lines { position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(95,224,255,0.025) 0 1px, transparent 1px 3px); mix-blend-mode: screen; }
+.vignette { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 45%, transparent 55%, rgba(0,0,0,0.55)); }
+.panel { position: absolute; background: var(--panel); border: 1px solid var(--line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.panel::before, .panel::after { content: ""; position: absolute; width: 10px; height: 10px; border: 1px solid var(--cyan); opacity: .7; }
+.panel::before { top: -1px; left: -1px; border-right: 0; border-bottom: 0; }
+.panel::after { bottom: -1px; right: -1px; border-left: 0; border-top: 0; }
+.brand { top: max(14px, env(safe-area-inset-top, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); padding: 10px 14px; width: 300px; }
+.brand .eyebrow { font-family: var(--mono); font-size: 10.5px; letter-spacing: .14em; color: var(--cyan); text-transform: uppercase; }
+.brand h1 { font-family: var(--display); font-weight: 700; font-size: 21px; letter-spacing: .02em; margin: 2px 0 0; text-wrap: balance; }
+.brand .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.rail { top: 140px; left: max(16px, env(safe-area-inset-left, 0px)); width: 250px; padding: 0 6px 6px; display: grid; gap: 1px; }
+.rail .grip { margin: 0 -6px 4px; }
+.rail .kicker { color: var(--cyan); }
+#railList { display: grid; gap: 1px; }
+#railList button { width: 100%; box-sizing: border-box; }
+.rail button { all: unset; cursor: pointer; display: grid; grid-template-columns: 26px 1fr auto; align-items: center; gap: 7px; padding: 4px 6px; border: 1px solid transparent; color: var(--muted); font-family: var(--display); font-size: 12.5px; letter-spacing: .02em; }
+.rail button .n { font-family: var(--mono); font-size: 11px; color: var(--muted); border: 1px solid var(--line); text-align: center; padding: 1px 0; }
+.rail button .st { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; }
+.rail button:hover { color: var(--fg); background: rgba(95,224,255,0.05); }
+.rail button:focus-visible { outline: 1px solid var(--cyan); }
+.rail button[aria-current="step"] { color: var(--fg); border-color: var(--line2); background: linear-gradient(90deg, rgba(95,224,255,0.14), rgba(95,224,255,0.02)); }
+.rail button[aria-current="step"] .n { color: #001018; background: var(--cyan); border-color: var(--cyan); }
+.rail button.done .st { color: var(--ok); }
+.card { left: max(16px, env(safe-area-inset-left, 0px)); bottom: max(16px, env(safe-area-inset-bottom, 0px)); width: 330px; padding: 0 12px 10px; display: grid; gap: 7px; }
+.grip { display: flex; align-items: center; gap: 8px; margin: 0 -12px; padding: 6px 8px 6px 12px; border-bottom: 1px solid var(--line); cursor: grab; user-select: none; touch-action: none; }
+.grip:active { cursor: grabbing; }
+.grip .dots { width: 10px; height: 14px; background: radial-gradient(circle, var(--muted) 1.2px, transparent 1.4px) 0 0 / 5px 5px; opacity: .8; flex: none; }
+.grip .kicker { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.icon-btn { all: unset; cursor: pointer; width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid var(--line); color: var(--muted); font-family: var(--mono); font-size: 12px; flex: none; }
+.icon-btn:hover { color: var(--fg); border-color: var(--line2); }
+.icon-btn:focus-visible { outline: 1px solid var(--cyan); }
+.kicker { font-family: var(--mono); font-size: 10px; letter-spacing: .14em; color: var(--orange); text-transform: uppercase; }
+.card h2 { font-family: var(--display); font-size: 17px; font-weight: 600; margin: 0; text-wrap: balance; }
+.card p { margin: 0; font-size: 12.5px; line-height: 1.5; color: #c4d3e2; max-width: 62ch; }
+.card .how { font-family: var(--mono); font-size: 10.5px; color: var(--muted); line-height: 1.55; border-left: 2px solid var(--line2); padding-left: 8px; }
+.card .how b { color: var(--cyan); font-weight: 500; }
+.card.min p, .card.min .how, .rail.min #railList, .hud.min #hudBody, .brand.min .sub, .brand.min h1 { display: none; }
+.brand .grip, .hud .grip { margin: 0 -14px 6px; }
+.hud .grip { margin-top: -12px; }
+.brand .grip { margin-top: -10px; }
+.hud .grip .kicker { color: var(--cyan); }
+#hudBody { display: grid; gap: 10px; }
+@media (min-width: 981px) {
+  .panel { resize: both; overflow-x: hidden; overflow-y: auto; min-width: 200px; min-height: 40px; scrollbar-width: thin; scrollbar-color: rgba(110,200,255,0.3) transparent; }
+  .panel::before { top: 0; left: 0; } .panel::after { bottom: 0; right: 0; }
+  .panel.min { resize: none; height: auto !important; min-height: 0; }
+  .panel::-webkit-resizer { background: linear-gradient(135deg, transparent 50%, var(--cyan) 50%, var(--cyan) 60%, transparent 60%, transparent 75%, var(--cyan) 75%, var(--cyan) 85%, transparent 85%); }
+}
+#cardBody { display: grid; gap: 7px; }
+.controls { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.btn { all: unset; cursor: pointer; font-family: var(--display); font-weight: 600; font-size: 11.5px; letter-spacing: .05em; padding: 6px 10px; border: 1px solid var(--line2); color: var(--fg); background: rgba(95,224,255,0.06); text-transform: uppercase; }
+.btn:hover { background: rgba(95,224,255,0.14); }
+.btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.btn.primary { background: var(--cyan); color: #001018; border-color: var(--cyan); box-shadow: 0 0 18px rgba(95,224,255,0.35); }
+.btn.primary:hover { filter: brightness(1.1); }
+.btn[disabled] { opacity: .4; pointer-events: none; }
+.btn.warn { border-color: rgba(255,95,180,.6); color: var(--orange); background: rgba(255,95,180,.08); }
+.optrow { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; }
+.optrow > span { width: 50px; }
+.seg { display: inline-flex; border: 1px solid var(--line2); }
+.seg button { all: unset; cursor: pointer; font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; padding: 4px 9px; color: var(--muted); }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button:hover { color: var(--fg); }
+.seg button[aria-pressed="true"] { background: rgba(95,224,255,0.16); color: var(--fg); }
+.seg button:focus-visible { outline: 1px solid var(--cyan); }
+.rec { font-family: var(--mono); font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--orange); border: 1px solid rgba(255,95,180,.45); padding: 1px 5px; }
+.shot { width: 100%; display: block; border: 1px solid var(--line); }
+table.mini { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+table.mini th, table.mini td { text-align: right; padding: 3px 4px; border-bottom: 1px solid var(--line); }
+table.mini th:first-child, table.mini td:first-child { text-align: left; color: var(--muted); }
+table.mini th { color: var(--cyan); font-weight: 500; }
+.slider { display: grid; gap: 4px; width: 100%; }
+.slider input { width: 100%; accent-color: var(--cyan); }
+.slider .lab { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.hud { top: max(14px, env(safe-area-inset-top, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); width: 340px; padding: 12px 14px; display: grid; gap: 10px; max-height: calc(100% - 30px); overflow-y: auto; overflow-x: hidden; }
+.hud h3 { margin: 0; font-family: var(--mono); font-size: 10.5px; font-weight: 500; letter-spacing: .14em; color: var(--cyan); text-transform: uppercase; display: flex; justify-content: space-between; }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.stat { border: 1px solid var(--line); padding: 7px 9px; min-width: 0; }
+.stat .k { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; }
+.stat .v { font-family: var(--display); font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat .v small { font-size: 12px; color: var(--muted); font-weight: 400; margin-left: 3px; }
+.stat.hot .v { color: var(--cyan); }
+.stat.good .v { color: var(--ok); }
+.stat.bad .v { color: var(--bad); }
+.stat.warn .v { color: var(--part); }
+canvas.chart { width: 100%; height: 170px; display: block; border: 1px solid var(--line); background: rgba(0,0,0,0.25); }
+canvas.chart.small { height: 128px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 12px; font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+.legend i { display: inline-block; width: 9px; height: 9px; margin-right: 5px; vertical-align: -1px; }
+.note { font-family: var(--mono); font-size: 10.5px; color: var(--muted); line-height: 1.5; }
+.note b { color: var(--orange); font-weight: 500; }
+.log { font-family: var(--mono); font-size: 11px; color: #9fb4c8; line-height: 1.55; max-height: 120px; overflow: auto; border-top: 1px solid var(--line); padding-top: 6px; }
+.log .t { color: var(--cyan); }
+.toast { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); font-family: var(--display); font-size: 15px; letter-spacing: .06em; padding: 8px 16px; border: 1px solid var(--line2); background: var(--panel); color: var(--fg); pointer-events: none; transition: opacity .4s; opacity: 0; white-space: nowrap; }
+.toast.on { opacity: 1; }
+.loading { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--mono); color: var(--cyan); letter-spacing: .2em; font-size: 12px; background: var(--bg); z-index: 5; transition: opacity .6s; }
+.loading.gone { opacity: 0; pointer-events: none; }
+@media (max-width: 980px) {
+  body { overflow: auto; }
+  .app { height: auto; display: flex; flex-direction: column; gap: 10px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 10px 24px; }
+  #view { position: relative; height: 58vh; min-height: 320px; margin: 0 calc(-1 * max(16px, env(safe-area-inset-left, 0px))); order: 1; }
+  .scan-lines, .vignette { display: none; }
+  .panel { position: relative; inset: auto; width: auto; max-height: none; }
+  .brand { order: 0; } .card { order: 2; } .hud { order: 3; } .rail { order: 4; }
+  .toast { position: fixed; }
+}
+@media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+</style>
+
+<div class="app">
+  <div id="view"><div class="loading" id="loading">LOADING THE BUILDING …</div></div>
+  <div class="scan-lines"></div><div class="vignette"></div>
+  <div class="panel brand" id="brand">
+    <div class="grip" title="Drag to move"><span class="dots"></span><span class="kicker" style="color:var(--cyan)">Live pipeline · real BIM</span><button class="icon-btn" type="button" id="brandMin" aria-label="Collapse title">–</button></div>
+    <h1>Schependomlaan Live Scan</h1>
+    <div class="sub">Scan a building site, find where the scan sits, then measure how much is built.</div>
+  </div>
+  <nav class="panel rail" id="rail" aria-label="Steps">
+    <div class="grip" title="Drag to move"><span class="dots"></span><span class="kicker">Steps</span><button class="icon-btn" type="button" id="railMin" aria-label="Collapse step list">–</button></div>
+    <div id="railList"></div>
+  </nav>
+  <section class="panel card" id="card" aria-live="polite">
+    <div class="grip" title="Drag to move"><span class="dots"></span><span class="kicker" id="cardKick"></span><button class="icon-btn" type="button" id="cardMin" aria-label="Hide explanation">–</button></div>
+    <div id="cardBody"></div>
+  </section>
+  <aside class="panel hud" id="hud">
+    <div class="grip" title="Drag to move"><span class="dots"></span><span class="kicker">Instruments</span><button class="icon-btn" type="button" id="hudMin" aria-label="Collapse instruments">–</button></div>
+    <div id="hudBody"></div>
+  </aside>
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>/*CORE*/</script>
+<script>window.DEMO_DATA = /*DATA*/;</script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+const Core = window.Core, M = Core.M;
+const bim = Core.loadBim(window.DEMO_DATA);
+const $ = s => document.querySelector(s);
+const fmt = (v, d = 0) => Number(v).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const CSS = getComputedStyle(document.documentElement);
+const col = n => CSS.getPropertyValue(n).trim();
+
+// ---------------- renderer / scene ----------------
+const view = $('#view');
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+view.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x04070d);
+scene.fog = new THREE.FogExp2(0x04070d, 0.0085);
+const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 800);
+camera.up.set(0, 0, 1);
+const C = bim.center;
+camera.position.set(C[0] + 34, C[1] - 42, C[2] + 26);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(C[0], C[1], C[2] - 1); controls.enableDamping = true; controls.maxDistance = 220; controls.minDistance = 6;
+controls.autoRotate = !reduceMotion; controls.autoRotateSpeed = 0.35;
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.7, 0.45, 1.25);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+// light: sun from the same direction the simulated camera colours use (Core.SCAN.SUN_AZ / SUN_EL)
+const S = Core.SCAN, az = S.SUN_AZ * Math.PI / 180, el = S.SUN_EL * Math.PI / 180;
+const sunDir = new THREE.Vector3(Math.cos(el) * Math.cos(az), Math.cos(el) * Math.sin(az), Math.sin(el));
+const sun = new THREE.DirectionalLight(0xfff1dc, 2.6);
+sun.position.set(C[0] + sunDir.x * 60, C[1] + sunDir.y * 60, C[2] + sunDir.z * 60); sun.target.position.set(C[0], C[1], C[2]);
+sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -32, right: 32, top: 32, bottom: -32, near: 10, far: 140 }); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
+scene.add(sun, sun.target);
+scene.add(new THREE.HemisphereLight(0x9cc8ff, 0x2a2118, 0.75));
+
+// site: dark ground with a survey grid, trees (same clutter the scanner sees)
+const site = Core.siteClutter(bim);
+{
+  const g = new THREE.Mesh(new THREE.CircleGeometry(site.groundR, 96), new THREE.MeshStandardMaterial({ color: 0x1a1712, roughness: 1 }));
+  g.position.set(C[0], C[1], site.groundZ); g.receiveShadow = true; scene.add(g);
+  const grid = new THREE.GridHelper(120, 60, 0x1f6f8a, 0x103042); grid.rotation.x = Math.PI / 2; grid.position.set(C[0], C[1], site.groundZ + 0.02);
+  grid.material.transparent = true; grid.material.opacity = 0.55; scene.add(grid);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(site.groundR - 0.25, site.groundR, 128), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x5fe0ff).multiplyScalar(2.2), transparent: true, opacity: 0.6 }));
+  ring.position.set(C[0], C[1], site.groundZ + 0.03); scene.add(ring);
+  for (const t of site.trees) {
+    const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(t.rad, 2), new THREE.MeshStandardMaterial({ color: 0x3f5a35, roughness: 0.95, flatShading: true }));
+    crown.position.set(t.x, t.y, t.z); crown.castShadow = true; scene.add(crown);
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.25, t.z - site.groundZ, 8), new THREE.MeshStandardMaterial({ color: 0x4a3626 }));
+    trunk.rotation.x = Math.PI / 2; trunk.position.set(t.x, t.y, (t.z + site.groundZ) / 2); scene.add(trunk);
+  }
+}
+
+// ---------------- materials: procedural textures from the same pattern the scanner colours use ----------------
+const TILE = { brick_brown: [0.88, 0.5], brick_yellow: [0.88, 0.5], calcium_silicate: [1.8, 1.0], aerated_concrete: [1.2, 1.0], gypsum_block: [1.332, 1.0], wood: [1, 1], plywood: [1, 1] };
+const tileOf = cat => TILE[cat] || [3, 3];
+const matCache = {};
+function materialFor(cat) {
+  if (matCache[cat]) return matCache[cat];
+  const N = 256, cv = document.createElement('canvas'); cv.width = cv.height = N;
+  const ctx = cv.getContext('2d'), img = ctx.createImageData(N, N), [su, sv] = tileOf(cat), base = Core.RENDER_RGB[cat];
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const u = (x + 0.5) / N * su, v = (1 - (y + 0.5) / N) * sv; let p = Core.pattern(cat, u, v), b = base;
+    if (p < 0) { b = Core.MORTAR; p = 1; }
+    const o = 4 * (y * N + x); img.data[o] = Math.min(255, b[0] * p); img.data[o + 1] = Math.min(255, b[1] * p); img.data[o + 2] = Math.min(255, b[2] * p); img.data[o + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(cv); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+  const metal = cat.startsWith('steel') || cat === 'zinc';
+  return (matCache[cat] = new THREE.MeshStandardMaterial({ map: tex, roughness: metal ? 0.45 : cat === 'board_white' ? 0.7 : 0.88, metalness: metal ? 0.55 : 0, bumpMap: tex, bumpScale: cat.startsWith('brick') ? 0.6 : 0.2 }));
+}
+// triangle soup -> one mesh per material, with along-the-wall texture coordinates
+function buildMaterialMesh(soup) {
+  const groups = {};
+  for (let t = 0; t < soup.n; t++) {
+    const e = soup.triElem[t], cat = bim.cats[bim.elem.mat[e]], o = 9 * t, T = soup.tri;
+    const ax = T[o + 3] - T[o], ay = T[o + 4] - T[o + 1], az = T[o + 5] - T[o + 2], bx = T[o + 6] - T[o], by = T[o + 7] - T[o + 1], bz = T[o + 8] - T[o + 2];
+    let nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx; const l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l;
+    const g = groups[cat] || (groups[cat] = { p: [], n: [], uv: [] }), [su, sv] = tileOf(cat);
+    for (let k = 0; k < 3; k++) {
+      const x = T[o + 3 * k], y = T[o + 3 * k + 1], z = T[o + 3 * k + 2], uv = Core.texUV(x, y, z, nx, ny, nz);
+      g.p.push(x, y, z); g.n.push(nx, ny, nz); g.uv.push(uv[0] / su, uv[1] / sv);
+    }
+  }
+  const grp = new THREE.Group();
+  for (const [cat, g] of Object.entries(groups)) {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(g.p, 3)); geo.setAttribute('normal', new THREE.Float32BufferAttribute(g.n, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(g.uv, 2));
+    const m = new THREE.Mesh(geo, materialFor(cat)); m.castShadow = m.receiveShadow = true; grp.add(m);
+  }
+  return grp;
+}
+// full design, one vertex-coloured mesh (for detection / status colours) + hologram edges
+const fullSoup = { tri: bim.tri, triElem: bim.triElem, n: bim.nT };
+const statusMesh = (() => {
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(bim.tri.slice(), 3));
+  geo.computeVertexNormals();
+  geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(bim.nT * 9), 3));
+  const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.05, transparent: true, opacity: 0.92 }));
+  m.castShadow = true; m.visible = false; scene.add(m); return m;
+})();
+function colourStatus(fn) {   // fn(e) -> [r,g,b] 0..1
+  const a = statusMesh.geometry.attributes.color.array;
+  for (let t = 0; t < bim.nT; t++) { const c = fn(bim.triElem[t]); for (let k = 0; k < 3; k++) a.set(c, 9 * t + 3 * k); }
+  statusMesh.geometry.attributes.color.needsUpdate = true;
+}
+const holo = (() => {
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(bim.tri.slice(), 3));
+  const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo, 30), new THREE.LineBasicMaterial({ color: new THREE.Color(0x5fe0ff).multiplyScalar(0.9), transparent: true, opacity: 0.22, depthWrite: false }));
+  scene.add(edges); return edges;
+})();
+let buildingMesh = null;
+// site clutter (busy site) is a child of the building group, so it shows and hides with it
+const METAL = new Set(['scaffold', 'crane', 'fence', 'props', 'mach_metal', 'temp_metal']);
+function clutterGroup(soup) {
+  const grp = new THREE.Group(), byCls = {}, B = bim.busy;
+  for (const it of soup.clutter) (byCls[it.cls] = byCls[it.cls] || []).push(it.tri);
+  for (const [c, tris] of Object.entries(byCls)) {
+    const n = tris.reduce((a, t) => a + t.length, 0), pos = new Float32Array(n); let o = 0;
+    for (const t of tris) { pos.set(t, o); o += t.length; }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.computeVertexNormals();
+    const cls = B.classes[c], rgb = B.rgb[cls];
+    const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: new THREE.Color(`rgb(${rgb.join(',')})`), roughness: METAL.has(cls) ? 0.45 : 0.8,
+      metalness: METAL.has(cls) ? 0.5 : 0, side: THREE.DoubleSide, transparent: cls === 'fence', opacity: cls === 'fence' ? 0.45 : 1 }));
+    m.castShadow = cls !== 'fence'; m.receiveShadow = true; grp.add(m);
+  }
+  return grp;
+}
+function showStage(s, designOnly) {
+  if (buildingMesh) { scene.remove(buildingMesh); buildingMesh.traverse(o => o.geometry && o.geometry.dispose()); }
+  const busy = !designOnly && ST.site === 'busy';
+  const soup = Core.stageTris(bim, s, { busy, eyes: busy ? Core.viewpoints(bim, s).filter(v => v.kind === 'indoor').map(v => v.eye) : [] });
+  buildingMesh = buildMaterialMesh({ tri: soup.tri, triElem: soup.triElem, n: soup.nDesign });
+  if (soup.clutter.length) buildingMesh.add(clutterGroup(soup));
+  scene.add(buildingMesh);
+}
+function segHTML(id, label, opts, val) {
+  return `<div class="optrow"><span>${label}</span><div class="seg" id="${id}" role="group" aria-label="${label}">${opts.map(([v, t]) => `<button type="button" data-v="${v}" aria-pressed="${v === val}">${t}</button>`).join('')}</div></div>`;
+}
+function wireSeg(id, fn) {
+  const el = document.getElementById(id); if (!el) return;
+  el.onclick = e => { const b = e.target.closest('button'); if (!b || ST.busy) return; el.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b)); fn(b.dataset.v); };
+}
+
+// ---------------- point clouds ----------------
+const PT_VS = `attribute vec3 acol; varying vec3 vC; uniform float uSize; uniform float uScale;
+void main(){ vC = acol; vec4 mv = modelViewMatrix * vec4(position,1.0); gl_PointSize = uSize * uScale / -mv.z; gl_Position = projectionMatrix * mv; }`;
+const PT_FS = `varying vec3 vC; uniform float uOpacity; uniform vec3 uTint; uniform float uTintMix;
+void main(){ vec2 d = gl_PointCoord - 0.5; float r = dot(d,d); if (r > 0.25) discard; vec3 c = mix(vC, uTint, uTintMix); gl_FragColor = vec4(c * (1.0 - r*1.2), uOpacity); }`;
+function makeCloud(maxN, size) {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(maxN * 3), 3));
+  geo.setAttribute('acol', new THREE.BufferAttribute(new Uint8Array(maxN * 3), 3, true));
+  geo.setDrawRange(0, 0);
+  const mat = new THREE.ShaderMaterial({ vertexShader: PT_VS, fragmentShader: PT_FS, transparent: true, depthWrite: true,
+    uniforms: { uSize: { value: size || 0.09 }, uScale: { value: 800 }, uOpacity: { value: 1 }, uTint: { value: new THREE.Color(0x5fe0ff) }, uTintMix: { value: 0 } } });
+  const pts = new THREE.Points(geo, mat); pts.frustumCulled = false;
+  const grp = new THREE.Group(); grp.matrixAutoUpdate = false; grp.add(pts); scene.add(grp);
+  return { geo, mat, pts, grp, n: 0, max: maxN };
+}
+function setPose(cloud, T) { cloud.grp.matrix.set(...T); cloud.grp.matrixWorldNeedsUpdate = true; }
+function fillCloud(cloud, xyz, rgb) {
+  const n = Math.min(cloud.max, xyz.length / 3);
+  cloud.geo.attributes.position.array.set(xyz.subarray(0, 3 * n)); cloud.geo.attributes.acol.array.set(rgb.subarray(0, 3 * n));
+  cloud.geo.attributes.position.needsUpdate = cloud.geo.attributes.acol.needsUpdate = true; cloud.geo.setDrawRange(0, n); cloud.n = n;
+}
+const scanCloud = makeCloud(260000, 0.085);
+
+// ray streaks + scanner gizmos
+const rays = (() => {
+  const MAX = 900, geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(MAX * 6), 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(MAX * 6), 3));
+  geo.setDrawRange(0, 0);
+  const ls = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false }));
+  ls.frustumCulled = false; scene.add(ls);
+  return { geo, ls, MAX, n: 0 };
+})();
+function setRays(list) {   // list of [ox,oy,oz, x,y,z, r,g,b]
+  const P = rays.geo.attributes.position.array, Cc = rays.geo.attributes.color.array, n = Math.min(list.length, rays.MAX);
+  for (let i = 0; i < n; i++) { const q = list[i]; P.set([q[0], q[1], q[2], q[3], q[4], q[5]], 6 * i); Cc.set([q[6] * 0.25, q[7] * 0.25, q[8] * 0.25, q[6], q[7], q[8]], 6 * i); }
+  rays.geo.setDrawRange(0, 2 * n); rays.geo.attributes.position.needsUpdate = rays.geo.attributes.color.needsUpdate = true;
+}
+const drone = (() => {
+  const g = new THREE.Group(), glow = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x5fe0ff).multiplyScalar(3) });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.25), new THREE.MeshStandardMaterial({ color: 0x1b2533, metalness: .6, roughness: .3 }));
+  g.add(body);
+  for (const [x, y] of [[-.7, -.7], [.7, -.7], [-.7, .7], [.7, .7]]) { const r = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.04, 6, 24), glow); r.position.set(x, y, 0.1); g.add(r); }
+  const eye = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 12), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff5fb4).multiplyScalar(3) })); eye.position.z = -0.2; g.add(eye);
+  g.visible = false; scene.add(g); return g;
+})();
+const tripod = (() => {
+  const g = new THREE.Group();
+  const head = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.4, 16), new THREE.MeshStandardMaterial({ color: 0x223040, metalness: .5 })); head.rotation.x = Math.PI / 2; g.add(head);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.025, 6, 40), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x5fe0ff).multiplyScalar(3) })); g.add(ring); g.userData.ring = ring;
+  g.visible = false; scene.add(g); return g;
+})();
+
+// ---------------- HUD helpers ----------------
+const hud = $('#hudBody'), card = $('#card'), toastEl = $('#toast');
+const lastCharts = {};   // redraw charts when their window is resized
+new ResizeObserver(() => { for (const [id, f] of Object.entries(lastCharts)) if (document.getElementById(id)) f(); }).observe($('#hud'));
+let toastT = 0;
+function toast(msg) { toastEl.textContent = msg; toastEl.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => toastEl.classList.remove('on'), 2600); }
+function statsHTML(items) { return `<div class="stats">${items.map(([k, v, cls, id]) => `<div class="stat ${cls || ''}"><div class="k">${k}</div><div class="v" ${id ? `id="${id}"` : ''}>${v}</div></div>`).join('')}</div>`; }
+function setV(id, v) { const el = document.getElementById(id); if (el) el.innerHTML = v; }
+function chartCanvas(id, small) { return `<canvas class="chart ${small ? 'small' : ''}" id="${id}"></canvas>`; }
+function ctx2d(id) {
+  const cv = document.getElementById(id); if (!cv) return null;
+  const r = cv.getBoundingClientRect(), dpr = Math.min(devicePixelRatio, 2);
+  if (cv.width !== Math.round(r.width * dpr)) { cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr); }
+  const c = cv.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, r.width, r.height);
+  c.W = r.width; c.H = r.height; c.font = '10px "IBM Plex Mono", monospace'; return c;
+}
+// simple line chart: series = [{pts:[[x,y]...], color, width, dash, fill}], marks: [{x,y,color,label}]
+function lineChart(id, o) {
+  lastCharts[id] = () => lineChart(id, o);
+  const c = ctx2d(id); if (!c) return;
+  const L = 34, R = 8, Tp = 10, B = 20, w = c.W - L - R, h = c.H - Tp - B;
+  const X = x => L + (x - o.x0) / (o.x1 - o.x0) * w, Y = y => Tp + h - (y - o.y0) / (o.y1 - o.y0) * h;
+  c.strokeStyle = 'rgba(110,200,255,0.12)'; c.fillStyle = col('--muted'); c.lineWidth = 1;
+  for (const gy of o.yTicks || []) { c.beginPath(); c.moveTo(L, Y(gy)); c.lineTo(L + w, Y(gy)); c.stroke(); c.textAlign = 'right'; c.fillText(o.yFmt ? o.yFmt(gy) : gy, L - 4, Y(gy) + 3); }
+  c.textAlign = 'center';
+  for (const gx of o.xTicks || []) c.fillText(o.xFmt ? o.xFmt(gx) : gx, X(gx), c.H - 6);
+  for (const s of o.series) {
+    if (!s.pts.length) continue;
+    c.beginPath(); s.pts.forEach(([x, y], i) => i ? c.lineTo(X(x), Y(y)) : c.moveTo(X(x), Y(y)));
+    if (s.fill) { c.save(); c.lineTo(X(s.pts[s.pts.length - 1][0]), Y(o.y0)); c.lineTo(X(s.pts[0][0]), Y(o.y0)); c.closePath(); c.fillStyle = s.fill; c.fill(); c.restore(); c.beginPath(); s.pts.forEach(([x, y], i) => i ? c.lineTo(X(x), Y(y)) : c.moveTo(X(x), Y(y))); }
+    c.strokeStyle = s.color; c.lineWidth = s.width || 1.5; c.setLineDash(s.dash || []); c.stroke(); c.setLineDash([]);
+    if (s.dots) for (const [x, y] of s.pts) { c.beginPath(); c.arc(X(x), Y(y), s.dots, 0, 7); c.fillStyle = s.color; c.fill(); }
+  }
+  for (const m of o.marks || []) {
+    c.beginPath(); c.arc(X(m.x), Y(m.y), m.r || 4, 0, 7); c.fillStyle = m.color; c.fill();
+    if (m.ring) { c.beginPath(); c.arc(X(m.x), Y(m.y), 8, 0, 7); c.strokeStyle = m.color; c.lineWidth = 1; c.stroke(); }
+    if (m.label) { c.fillStyle = m.color; c.textAlign = X(m.x) > L + w - 70 ? 'right' : 'left'; c.fillText(m.label, X(m.x) + (c.textAlign === 'right' ? -10 : 10), Y(m.y) - 6); }
+  }
+}
+function rasterChart(id, B, Cimg, G) {   // BIM floor plan (cyan) and the turned scan (orange)
+  lastCharts[id] = () => rasterChart(id, B, Cimg, G);
+  const c = ctx2d(id); if (!c) return;
+  const s = Math.min(c.W, c.H), ox = (c.W - s) / 2, cell = s / G;
+  c.fillStyle = 'rgba(0,0,0,0.3)'; c.fillRect(ox, 0, s, s);
+  for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) {
+    const i = y * G + x, b = B && B[i], k = Cimg && Cimg[i];
+    if (!b && !k) continue;
+    c.fillStyle = b && k ? '#ffffff' : b ? 'rgba(95,224,255,0.55)' : 'rgba(255,95,180,0.9)';
+    c.fillRect(ox + x * cell, s - (y + 1) * cell, cell + 0.3, cell + 0.3);
+  }
+}
+const logLines = [];
+function log(msg) { logLines.push(msg); const el = $('#log'); if (el) { el.innerHTML = logLines.slice(-40).map(l => `<div>${l}</div>`).join(''); el.scrollTop = 1e6; } }
+
+// run a generator in small time slices so the page stays smooth
+function runSliced(gen, onEvent, budget = 10) {
+  return new Promise(resolve => {
+    const tick = () => {
+      const t0 = performance.now();
+      while (performance.now() - t0 < budget) { const r = gen.next(); if (r.done) { resolve(); return; } if (onEvent(r.value) === 'yield') break; }
+      requestAnimationFrame(tick);
+    };
+    tick();
+  });
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function animatePose(cloud, A, B, ms) {
+  return new Promise(res => { const t0 = performance.now(); const f = () => { let t = Math.min(1, (performance.now() - t0) / ms); const e = t < .5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2; setPose(cloud, M.lerp(A, B, e)); if (t < 1) requestAnimationFrame(f); else res(); }; f(); });
+}
+let camAnim = null;
+function flyTo(pos, target, ms = 1400) {
+  const p0 = camera.position.clone(), t0v = controls.target.clone(), p1 = new THREE.Vector3(...pos), t1 = new THREE.Vector3(...target), st = performance.now();
+  camAnim = () => { let t = Math.min(1, (performance.now() - st) / ms); t = t < .5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2; camera.position.lerpVectors(p0, p1, t); controls.target.lerpVectors(t0v, t1, t); if (t >= 1) camAnim = null; };
+  if (reduceMotion) { camera.position.copy(p1); controls.target.copy(t1); camAnim = null; }
+}
+const camHome = () => flyTo([C[0] + 34, C[1] - 42, C[2] + 26], [C[0], C[1], C[2] - 1]);
+const camWide = () => flyTo([C[0] + 60, C[1] - 75, C[2] + 55], [C[0], C[1], C[2] - 2]);
+
+// ---------------- state ----------------
+const ST = { stage: 7, site: 'clean', sensor: 'simple', scanner: null, scanned: false, cloud: null, cloudF: null, ev: null, off: null, seed: 1, plan: null, plain: null, multi: null, match: null, vis: null, score: null, busy: false };
+const scanOpts = () => ({ site: ST.site, sensor: ST.sensor });
+const usedCloud = () => ST.cloudF || ST.cloud;   // the cleaned scan once clutter removal ran
+const model = Core.bimModel(bim);
+function stageLabel(s) { const n = bim.stages[s]; const [, , ...rest] = n.split('_'); const ph = rest.pop(); return `${n.slice(0, 2)} · ${rest.join(' ').replace(/^(m1|0\d)\s*/, '')} · ${ph}`; }
+function stageCounts(s) { let k = 0, p = 0; for (let e = 0; e < bim.nE; e++) { const v = bim.stateAt(s, e); if (v === 255) k++; else if (v) p++; } return { k, p, n: bim.nE - k - p }; }
+
+function ensureScan() {   // runs the scan at once (used when someone jumps ahead)
+  if (ST.scanned) return;
+  const sc = new Core.Scanner(bim, ST.stage, 1, scanOpts()); while (!sc.done()) sc.step(8);
+  ST.scanner = sc; ST.scanned = true;
+}
+function throwCloud(seed) {
+  ST.seed = seed; ST.off = Core.surveyOffset(bim, 'local', seed);
+  const r = ST.scanner.finish(ST.off.T); ST.cloud = r.cloud; ST.ev = r.eval; ST.cloudF = null;
+  ST.plan = ST.plain = ST.match = ST.vis = ST.score = null;
+  fillCloud(scanCloud, ST.cloud.xyz, ST.cloud.rgb); setPose(scanCloud, M.eye());
+}
+function resetForStage(s) {
+  ST.stage = s; ST.scanned = false; ST.scanner = null; ST.cloud = ST.cloudF = null; ST.plan = ST.plain = ST.multi = ST.match = ST.vis = ST.score = null;
+  scanCloud.geo.setDrawRange(0, 0); clearGhosts(); showStage(s);
+}
+function busyCounts(s) {   // as-built errors on the busy site at stage s
+  const B = bim.busy, bs = B.stages[s]; let dev = 0;
+  for (const e of B.deviated) if (bim.stateAt(s, e) && !bs.missing.has(e)) dev++;
+  return { late: bs.missing.size, moved: bs.misplaced.size, dev };
+}
+
+// ---------------- steps ----------------
+const steps = [];
+let cur = -1;
+function step(def) { steps.push(def); }
+function renderRail() {
+  $('#railList').innerHTML = steps.map((s, i) => `<button type="button" data-i="${i}" ${i === cur ? 'aria-current="step"' : ''} class="${s.done && s.done() ? 'done' : ''}"><span class="n">${String(i + 1).padStart(2, '0')}</span><span>${s.title}</span><span class="st">${s.done && s.done() ? 'DONE' : ''}</span></button>`).join('');
+}
+$('#railList').addEventListener('click', e => { const b = e.target.closest('button'); if (b && !ST.busy) go(+b.dataset.i); });
+// floating panels: drag by the grip bar, resize from the bottom-right corner, collapse with – (desktop layout only)
+const desktop = () => !matchMedia('(max-width: 980px)').matches;
+function pinTopLeft(panel) {   // switch to top/left anchoring so dragging and resizing feel natural
+  const r = panel.getBoundingClientRect(), app = $('.app').getBoundingClientRect();
+  Object.assign(panel.style, { left: r.left - app.left + 'px', top: r.top - app.top + 'px', right: 'auto', bottom: 'auto', maxHeight: `calc(100% - ${Math.round(r.top - app.top)}px - 8px)` });
+}
+function makeDraggable(panel) {
+  const grip = panel.querySelector('.grip');
+  panel.addEventListener('pointerdown', e => { if (desktop() && !panel.style.top) pinTopLeft(panel); }, true);
+  grip.addEventListener('pointerdown', e => {
+    if (e.target.closest('button') || !desktop()) return;
+    const r = panel.getBoundingClientRect(), app = $('.app').getBoundingClientRect(), dx = e.clientX - r.left, dy = e.clientY - r.top;
+    pinTopLeft(panel);
+    grip.setPointerCapture(e.pointerId);
+    const move = ev => {
+      const w = panel.offsetWidth, h = panel.offsetHeight;
+      panel.style.left = Math.max(0, Math.min(app.width - w, ev.clientX - app.left - dx)) + 'px';
+      panel.style.top = Math.max(0, Math.min(app.height - 40, ev.clientY - app.top - dy)) + 'px';
+      if (panel.offsetTop + h > app.height) panel.style.top = Math.max(0, app.height - h) + 'px';
+    };
+    const up = () => { grip.removeEventListener('pointermove', move); grip.removeEventListener('pointerup', up); pinTopLeft(panel); };
+    grip.addEventListener('pointermove', move); grip.addEventListener('pointerup', up);
+  });
+}
+for (const id of ['#brand', '#rail', '#card', '#hud']) makeDraggable($(id));
+for (const [btn, panel] of [['#railMin', '#rail'], ['#cardMin', '#card'], ['#hudMin', '#hud'], ['#brandMin', '#brand']]) $(btn).onclick = () => { const p = $(panel), m = p.classList.toggle('min'); $(btn).textContent = m ? '+' : '–'; };
+function go(i) {
+  if (ST.busy) return;
+  cur = i; const s = steps[i];
+  setRays([]); drone.visible = tripod.visible = false;
+  statusMesh.visible = false; if (buildingMesh) buildingMesh.visible = true; holo.material.opacity = 0.22;
+  scanCloud.grp.visible = true; if (colmapCloud) colmapCloud.grp.visible = false; scanCloud.mat.uniforms.uOpacity.value = 1; scanCloud.mat.uniforms.uTintMix.value = 0;
+  $('#cardKick').textContent = `Step ${i + 1} of ${steps.length} · ${s.kicker}`;
+  $('#cardBody').innerHTML = `<h2>${s.title}</h2><p>${s.text}</p><div class="how">${s.how}</div><div class="controls" id="ctl"></div>`;
+  hud.innerHTML = '';
+  s.enter();
+  const nav = document.createElement('div'); nav.className = 'controls';
+  if (i < steps.length - 1) nav.innerHTML = `<button class="btn" id="next" type="button">Next step →</button>`;
+  $('#ctl').after(nav);
+  const nx = $('#next'); if (nx) nx.onclick = () => go(i + 1);
+  renderRail();
+}
+function busy(b) { ST.busy = b; document.querySelectorAll('#cardBody .btn, #railList button').forEach(x => x.toggleAttribute('disabled', b)); }
+function ctl(html) { $('#ctl').innerHTML = html; }
+
+// 1 -- the design model
+step({
+  title: 'The design model', kicker: 'BIM', done: () => true,
+  text: 'This is the real Schependomlaan apartment block from its design file (IFC). Every wall, slab, beam and column is one element with an ID and a material. Bricks, sand-lime blocks, concrete, steel and timber are drawn with their own texture.',
+  how: '<b>input</b> data/ifc/IFC Schependomlaan.ifc → 1,355 elements, 38,084 triangles<br><b>materials</b> read from IfcMaterial layers → 16 kinds',
+  enter() {
+    showStage(bim.nStages - 1, true); camHome(); controls.autoRotate = !reduceMotion;
+    const byType = [0, 0, 0, 0]; for (const t of bim.elem.type) byType[t]++;
+    const byMat = {}; bim.elem.mat.forEach(m => byMat[bim.cats[m]] = (byMat[bim.cats[m]] || 0) + 1);
+    hud.innerHTML = `<h3>Model <span>BIM frame · metres</span></h3>` + statsHTML([['walls', fmt(byType[3]), 'hot'], ['slabs', fmt(byType[2])], ['beams', fmt(byType[1])], ['columns', fmt(byType[0])]]) +
+      `<h3>Materials</h3><div class="legend">${Object.entries(byMat).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span><i style="background:rgb(${Core.RENDER_RGB[k]})"></i>${k.replace('_', ' ')} ${v}</span>`).join('')}</div>
+      <div class="note">Drag to orbit, scroll to zoom. Everything on this page is computed live in your browser, from the real design file.</div>`;
+    ctl('');
+  },
+});
+
+// 2 -- construction stages
+step({
+  title: 'Build it in stages', kicker: 'Ground truth', done: () => true,
+  text: 'We cut the finished design into 16 moments of construction. Each floor goes structure first, then the outer walls, then the inside walls. Some walls are only part-way up, like a real site on a real day. Pick the day to scan, and how messy the site and the sensor are.',
+  how: '<b>p2_ablate.py</b> bottom-up per storey · 8% shuffled order · part-built walls are cut to a height<br><b>busy site</b> site_clutter.py: scaffold, crane, fence, shoring props · 4% built 4–12 cm off · 3% late · 1.5% built in the wrong place<br><b>truth</b> the stage list is the answer key; only the scoring may look at it',
+  enter() {
+    showStage(ST.stage); camHome();
+    ctl(`<div class="slider"><label class="lab" for="stg"><span>stage</span><span id="stgName">${stageLabel(ST.stage)}</span></label><input id="stg" type="range" min="0" max="${bim.nStages - 1}" value="${ST.stage}"></div>` +
+      (bim.busy ? segHTML('siteSeg', 'Site', [['clean', 'Clean'], ['busy', 'Busy']], ST.site) : '') +
+      segHTML('sensSeg', 'Sensor', [['simple', 'Simple'], ['realistic', 'Realistic']], ST.sensor));
+    const upd = () => {
+      const c = stageCounts(ST.stage); setV('sk', fmt(c.k)); setV('sp', fmt(c.p)); setV('sn', fmt(c.n)); setV('spct', fmt(100 * (c.k + c.p) / bim.nE) + '<small>%</small>'); $('#stgName').textContent = stageLabel(ST.stage);
+      const bz = $('#busyBox'); if (!bz) return;
+      if (ST.site !== 'busy') { bz.innerHTML = '<div class="note">Clean site: only ground and four trees around the building. Switch to <b>Busy</b> to add a real site\'s mess.</div>'; return; }
+      const b = busyCounts(ST.stage), cls = new Set(Core.stageTris(bim, ST.stage, { busy: true }).clutter.map(it => bim.busy.classes[it.cls]));
+      const names = { scaffold: 'scaffold', crane: 'crane', fence: 'fence', props: 'shoring props', pile: 'material piles', worker: 'workers' };
+      bz.innerHTML = `<h3>Busy site, this stage <span>simulated</span></h3>` + statsHTML([['late (not there yet)', fmt(b.late), 'warn'], ['built in wrong place', fmt(b.moved), 'bad'], ['built 4–12 cm off', fmt(b.dev)], ['site objects', fmt(cls.size)]]) +
+        `<div class="legend">${Object.keys(names).filter(k => cls.has(k)).map(k => `<span><i style="background:rgb(${bim.busy.rgb[k]})"></i>${names[k]}</span>`).join('')}${[...cls].some(k => k.startsWith('mach') || k.startsWith('temp')) ? '<span><i style="background:rgb(232,170,20)"></i>machinery &amp; tools</span>' : ''}</div>
+        <div class="note">Late and wrongly placed elements count as <b>not built</b> in the answer key.</div>`;
+    };
+    hud.innerHTML = `<h3>This stage <span>answer key</span></h3>` + statsHTML([['fully built', '', 'good', 'sk'], ['part built', '', 'warn', 'sp'], ['not started', '', '', 'sn'], ['elements up', '', 'hot', 'spct']]) +
+      `<div id="busyBox"></div><div class="note">Changing the stage, site or sensor clears the scan, so the next steps run on what you pick.</div>`;
+    upd();
+    $('#stg').oninput = e => { resetForStage(+e.target.value); upd(); };
+    wireSeg('siteSeg', v => { ST.site = v; resetForStage(ST.stage); upd(); toast(v === 'busy' ? 'Busy site: scaffold, crane, fence, shoring props' : 'Clean site'); });
+    wireSeg('sensSeg', v => { ST.sensor = v; resetForStage(ST.stage); toast(v === 'realistic' ? 'Realistic sensor: noise grows with range and angle, holes, ghosts, floaters' : 'Simple sensor: 1.5 cm noise, 15% of hits lost'); });
+  },
+});
+
+// 3 -- drone + indoor scan by ray casting
+step({
+  title: 'Fly the scan', kicker: 'Ray casting', done: () => ST.scanned,
+  text: 'A drone circles the site at three heights and a scanner walks each finished floor. From every position we shoot rays. A ray stops at the first thing it hits, and that hit becomes one coloured point. The colour is what a camera would see: the material, in sunlight or shadow, plus a little noise.',
+  how: '<b>drone</b> 60 photos, 70° view, 2,400 rays each · <b>indoor</b> 9 stations per floor, 2,000 rays each<br><b>simple sensor</b> 1.5 cm noise · 15% of hits lost<br><b>realistic sensor</b> noise grows with range and grazing angle · edge-on surfaces vanish · holes in plain photo patches · edge ghosts · floaters<br>ground, trees and site clutter are in the scan but not in the design',
+  enter() {
+    showStage(ST.stage); flyTo([C[0] + 48, C[1] - 58, C[2] + 36], [C[0], C[1], C[2] - 2]);
+    hud.innerHTML = `<h3>Scanner <span id="scMode">${ST.site} site · ${ST.sensor} sensor</span></h3>` + statsHTML([['rays cast', '0', 'hot', 'scR'], ['points', '0', '', 'scP'], ['position', '–', '', 'scV'], ['hit rate', '–', '', 'scH']]) +
+      `<h3>Colour of the points</h3><div class="note">Point colour = material colour × sunlight (a second ray checks for shadow) × texture at that spot. The page never paints points by class, because class is part of the answer.</div><div class="log" id="log"></div>`;
+    ctl(`<button class="btn primary" id="scanBtn" type="button">${ST.scanned ? 'Scan again' : 'Start the scan'}</button><button class="btn" id="fastBtn" type="button">Finish now</button>`);
+    if (ST.scanned) { fillCloud(scanCloud, new Float32Array(ST.scanner.pts), new Uint8Array(ST.scanner.rgb)); setPose(scanCloud, M.eye()); setV('scP', fmt(scanCloud.n)); }
+    let fast = false;
+    $('#fastBtn').onclick = () => { fast = true; };
+    $('#scanBtn').onclick = async () => {
+      busy(true); $('#fastBtn').removeAttribute('disabled'); fast = false;
+      const sc = new Core.Scanner(bim, ST.stage, 1, scanOpts()); ST.scanner = sc; ST.scanned = false; ST.cloud = ST.cloudF = null;
+      scanCloud.geo.setDrawRange(0, 0); scanCloud.n = 0; setPose(scanCloud, M.eye());
+      if (buildingMesh) buildingMesh.visible = true;
+      let rayCount = 0, hits = 0;
+      const P = scanCloud.geo.attributes.position, A = scanCloud.geo.attributes.acol;
+      log('<span class="t">scan</span> ' + sc.views.length + ' positions');
+      while (!sc.done()) {
+        const out = sc.step(fast ? 6 : 1), v = out.view;
+        rayCount += out.nRays; const nh = out.hits.length / 6; hits += nh;
+        const base = scanCloud.n;
+        for (let i = 0; i < nh && base + i < scanCloud.max; i++) { const h = out.hits; P.array.set([h[6 * i], h[6 * i + 1], h[6 * i + 2]], 3 * (base + i)); A.array.set([h[6 * i + 3], h[6 * i + 4], h[6 * i + 5]], 3 * (base + i)); }
+        scanCloud.n = Math.min(scanCloud.max, base + nh); scanCloud.geo.setDrawRange(0, scanCloud.n); P.needsUpdate = A.needsUpdate = true;
+        const g = v.kind === 'drone' ? drone : tripod; drone.visible = v.kind === 'drone'; tripod.visible = v.kind !== 'drone';
+        g.position.set(...v.eye); if (v.kind === 'drone') g.lookAt(C[0], C[1], g.position.z);
+        const list = [], step_ = Math.max(1, Math.floor(nh / 260));
+        for (let i = 0; i < nh; i += step_) { const h = out.hits; list.push([v.eye[0], v.eye[1], v.eye[2], h[6 * i], h[6 * i + 1], h[6 * i + 2], v.kind === 'drone' ? 0.4 : 1.9, v.kind === 'drone' ? 2.2 : 0.55, v.kind === 'drone' ? 2.8 : 1.3]); }
+        setRays(list);
+        setV('scR', fmt(rayCount)); setV('scP', fmt(scanCloud.n)); setV('scV', v.kind === 'drone' ? `drone ${sc.next}` : `indoor ${sc.next}`); setV('scH', fmt(100 * hits / rayCount) + '<small>%</small>'); setV('scMode', v.kind === 'drone' ? 'drone orbit' : 'indoor walk');
+        if (v.kind === 'indoor' && sc.views[sc.next - 2] && sc.views[sc.next - 2].kind === 'drone') { log('<span class="t">indoor</span> walking the finished floors'); if (buildingMesh) buildingMesh.visible = false; }
+        await new Promise(r => requestAnimationFrame(r));
+      }
+      if (buildingMesh) buildingMesh.visible = false;
+      setRays([]); drone.visible = tripod.visible = false; ST.scanned = true;
+      log(`<span class="t">done</span> ${fmt(sc.pts.length / 3)} points from ${fmt(rayCount)} rays`);
+      toast('Scan finished: ' + fmt(sc.pts.length / 3) + ' coloured points'); busy(false); $('#scanBtn').textContent = 'Scan again'; renderRail();
+    };
+  },
+});
+
+// 4 -- the scan does not know where it is; plain ICP
+step({
+  title: 'Lost in space', kicker: 'Why plain ICP fails', done: () => !!ST.plain,
+  text: 'A real scan comes in its own coordinates. Here it is turned to a random heading and moved up to 30 m away. First we give plain ICP a fair start: move the centre of the scan onto the centre of the building. Then ICP pulls every point toward the nearest wall and repeats. Centring fixes the shift but not the heading, and a half-built scan with ground and trees does not share the building\'s centre anyway. So ICP slides into a wrong spot and stays there, which is called a local minimum.',
+  how: '<b>offset</b> any heading · ±30 m sideways · ±5 m height · 0.5° tilt (indoor scan regime)<br><b>plain ICP</b> centre on centre, then point-to-plane, 2 m pull then 0.3 m · no search for the heading',
+  enter() {
+    ensureScan(); if (buildingMesh) buildingMesh.visible = false; holo.material.opacity = 0.35;
+    if (!ST.cloud) throwCloud(ST.seed);
+    else { fillCloud(scanCloud, ST.cloud.xyz, ST.cloud.rgb); setPose(scanCloud, M.eye()); }
+    camWide();
+    hud.innerHTML = `<h3>Where the scan landed <span>survey frame</span></h3>` + statsHTML([['heading off', fmt(ST.off.yaw, 0) + '<small>°</small>', 'hot', 'oy'], ['moved', fmt(Math.hypot(...ST.off.t), 1) + '<small>m</small>', '', 'ot'], ['start error', fmt(Core.regError(M.eye(), ST.ev), 1) + '<small>m</small>', '', 'se'], ['after centring', '–', 'warn', 'ce'], ['after ICP', '–', '', 'ie'], ['ICP steps', '–', '', 'is']]) +
+      `<h3>ICP: average gap to the walls <span>per step</span></h3>${chartCanvas('icpChart', true)}<div class="note"><b>error</b> = how far the points end up from where they truly belong. Only this demo can know it, because it made the offset. The method itself never sees it.</div>`;
+    ctl(`<button class="btn" id="thr" type="button">Throw it somewhere new</button><button class="btn warn" id="icpBtn" type="button">Try plain ICP</button>`);
+    $('#thr').onclick = () => { throwCloud(ST.seed + 17); setV('oy', fmt(ST.off.yaw, 0) + '<small>°</small>'); setV('ot', fmt(Math.hypot(...ST.off.t), 1) + '<small>m</small>'); setV('ie', '–'); setV('is', '–'); setV('ce', '–'); setV('se', fmt(Core.regError(M.eye(), ST.ev), 1) + '<small>m</small>'); lineChart('icpChart', { x0: 0, x1: 1, y0: 0, y1: 1, series: [] }); renderRail(); };
+    $('#icpBtn').onclick = async () => {
+      busy(true); toast('Plain ICP: pull every point to its nearest wall');
+      await sleep(30);
+      const r = Core.plainICP(model, ST.cloud.xyz); ST.plain = r;
+      let prev = M.eye(); const rms = [];
+      for (let i = 0; i < r.frames.length; i++) {
+        const f = r.frames[i];
+        if (f.centroid) {   // step 0: move the scan's centre onto the design's centre
+          toast('First: move the scan\'s centre onto the building\'s centre');
+          await animatePose(scanCloud, prev, f.T, 1400); prev = f.T;
+          const e0 = Core.regError(f.T, ST.ev); setV('ce', fmt(e0, 1) + '<small>m</small>');
+          await sleep(700); toast('Now plain ICP: pull every point to its nearest wall'); continue;
+        }
+        rms.push([rms.length + 1, f.rms]);
+        await animatePose(scanCloud, prev, f.T, rms.length < 6 ? 260 : 90); prev = f.T;
+        lineChart('icpChart', { x0: 1, x1: Math.max(10, rms.length), y0: 0, y1: Math.max(...rms.map(p => p[1])) * 1.1, yTicks: [0], series: [{ pts: rms, color: col('--orange'), width: 2, dots: 2 }], xTicks: [1, rms.length], yFmt: v => v.toFixed(1) });
+        setV('is', rms.length);
+      }
+      const err = Core.regError(r.T, ST.ev);
+      setV('ie', fmt(err, err < 1 ? 2 : 1) + '<small>m</small>'); document.getElementById('ie').parentElement.className = 'stat ' + (err < 0.05 ? 'good' : 'bad');
+      toast(err < 0.05 ? 'This time it was close enough to work' : `Stuck: ${fmt(err, 1)} m from the truth`); busy(false); renderRail();
+    };
+  },
+});
+
+// 5 -- the global search (registration.py, method "plan")
+step({
+  title: 'Search every heading', kicker: 'Global registration', done: () => !!ST.plan,
+  text: 'The fix is to search everywhere first. Gravity is known, so the scan is first made level. Then we draw a top-down floor plan of the scan\'s walls and slide it over the design\'s floor plan at every heading. The best overlap gives the heading and position. Then we check height in 3D, test the best few answers, and finish with a careful ICP.',
+  how: '<b>level</b> floors point up · <b>height</b> match floor heights · <b>plan</b> FFT overlap, 180 headings<br><b>3D check</b> height sweep ±6 m · top answers tested · robust ICP 1.0 → 0.4 → 0.15 m<br><b>browser size</b> 0.4 m pixels, 2° steps (full pipeline: 0.2 m, 1°)',
+  enter() {
+    ensureScan(); if (!ST.cloud) throwCloud(ST.seed);
+    fillCloud(scanCloud, ST.cloud.xyz, ST.cloud.rgb); setPose(scanCloud, ST.plan ? ST.plan.T : M.eye());
+    if (buildingMesh) buildingMesh.visible = false; holo.material.opacity = 0.4; camWide();
+    hud.innerHTML = `<h3>Search <span id="phase">ready</span></h3>` + statsHTML([['tilt fixed', '–', '', 'pt'], ['heading', '–', 'hot', 'ph'], ['fit within 5 cm', '–', '', 'pf'], ['true error', '–', '', 'pe']]) +
+      `<h3>Overlap score by heading <span>higher is better</span></h3>${chartCanvas('yawChart')}
+      <div class="legend"><span><i style="background:${col('--cyan')}"></i>design walls</span><span><i style="background:${col('--orange')}"></i>scan walls, turned</span><span><i style="background:#fff"></i>overlap</span></div>
+      ${chartCanvas('rasterChart')}<div class="log" id="log"></div>`;
+    ctl(`<button class="btn primary" id="runPlan" type="button">${ST.plan ? 'Run the search again' : 'Run the search'}</button><button class="btn" id="thr2" type="button">Throw it somewhere new</button>`);
+    if (ST.plan) showPlanResult(ST.plan);
+    $('#thr2').onclick = () => { throwCloud(ST.seed + 17); setPose(scanCloud, M.eye()); ['pt', 'ph', 'pf', 'pe'].forEach(k => setV(k, '–')); toast(`New start: heading ${fmt(ST.off.yaw)}°, ${fmt(Math.hypot(...ST.off.t), 1)} m away`); };
+    $('#runPlan').onclick = () => runPlanAnimated();
+  },
+});
+function showPlanResult(res) {
+  const err = Core.regError(res.T, ST.ev);
+  setV('pt', fmt(res.tilt, 2) + '<small>°</small>'); setV('pf', fmt(100 * res.tight) + '<small>%</small>');
+  setV('ph', fmt(((M.yawDeg(res.T) % 360) + 360) % 360, 1) + '<small>°</small>');
+  setV('pe', (err < 1 ? fmt(err * 100, 1) + '<small>cm</small>' : fmt(err, 1) + '<small>m</small>')); document.getElementById('pe').parentElement.className = 'stat ' + (err < 0.05 ? 'good' : 'bad');
+  drawYaw(res.yawCurve, res.best && res.best.yaw);
+}
+function drawYaw(curve, bestYaw, curYaw) {
+  if (!curve || !curve.length) return;
+  const mx = Math.max(...curve.map(c => c.score)), pts = curve.map(c => [c.yaw, c.score]);
+  const marks = []; if (bestYaw !== undefined) { const b = curve.find(c => c.yaw === bestYaw) || curve.reduce((a, b) => b.score > a.score ? b : a); marks.push({ x: b.yaw, y: b.score, color: col('--ok'), ring: true, label: 'global best ' + b.yaw + '°' }); }
+  if (curYaw !== undefined) { const c = curve[curve.length - 1]; marks.push({ x: c.yaw, y: c.score, color: col('--orange') }); }
+  lineChart('yawChart', { x0: 0, x1: 360, y0: 0, y1: mx * 1.12, xTicks: [0, 90, 180, 270, 360], xFmt: v => v + '°', yTicks: [0, mx / 2, mx], yFmt: v => v.toFixed(2), series: [{ pts, color: col('--cyan'), width: 1.6, fill: 'rgba(95,224,255,0.12)' }], marks });
+}
+async function runPlanAnimated() {
+  busy(true); logLines.length = 0;
+  const gen = Core.planSearch(model, ST.cloud.xyz);
+  let last = M.eye(), res = null, lastDraw = 0, sweepTop = null;
+  const phaseName = { level: 'levelling', height: 'floor heights', sweep: 'heading sweep', candidates: 'best answers', dz: '3D height check', verify: 'testing answers', icp: 'fine ICP', refine: 'fine ICP', done: 'done' };
+  await runSliced(gen, ev => {
+    setV('phase', phaseName[ev.phase]);
+    if (ev.phase === 'level') { log(`<span class="t">level</span> tilt ${fmt(ev.tilt, 2)}° removed, ${fmt(ev.prep.pts.length / 3)} points after thinning`); setV('pt', fmt(ev.tilt, 2) + '<small>°</small>'); setPose(scanCloud, ev.T); last = ev.T; return 'yield'; }
+    if (ev.phase === 'height') { log(`<span class="t">height</span> guesses ${ev.hz.cands.map(c => (c.dz >= 0 ? '+' : '') + c.dz.toFixed(1) + ' m').join(', ')}`); return 'yield'; }
+    if (ev.phase === 'sweep') {
+      setPose(scanCloud, ev.cand.T); setV('ph', ev.yaw + '<small>°</small>');
+      if (!sweepTop || ev.score > sweepTop.score) sweepTop = ev.cand;
+      const now = performance.now();
+      if (now - lastDraw > 60) { drawYaw(ev.yawCurve, undefined, ev.yaw); rasterChart('rasterChart', ev.bimImg, ev.cloudImg, Core.PLAN.G); lastDraw = now; }
+      return 'yield';
+    }
+    if (ev.phase === 'candidates') { log(`<span class="t">plan</span> best headings: ${ev.top.slice(0, 5).map(c => c.yaw + '°').join(', ')}`); drawYaw(sweepYaw(ev), ev.top[0].yaw); setPose(scanCloud, ev.top[0].T); return 'yield'; }
+    if (ev.phase === 'dz') { setPose(scanCloud, M.mul(M.trans(0, 0, ev.kept[0].d), ev.cand.T)); if (ev.ci === 0) log(`<span class="t">3D</span> sliding up and down, keeping the best heights`); return 'yield'; }
+    if (ev.phase === 'verify') { setPose(scanCloud, ev.v.Tv); log(`<span class="t">test</span> heading ${ev.v.yaw}° · ${fmt(100 * ev.v.verify)}% of points within 10 cm`); return 'yield'; }
+    if (ev.phase === 'icp') { setPose(scanCloud, ev.T); setV('pf', fmt(ev.rms * 100, 1) + '<small>cm rms</small>'); return 'yield'; }
+    if (ev.phase === 'refine') { log(`<span class="t">refine</span> answer ${ev.fi + 1}: ${fmt(100 * ev.f.tight)}% of points within 5 cm`); return 'yield'; }
+    if (ev.phase === 'done') res = ev;
+  }, 9);
+  function sweepYaw() { return res ? res.yawCurve : null; }
+  res.yawCurve = res.yawCurve || [];
+  ST.plan = res; setPose(scanCloud, res.T); showPlanResult(res);
+  log(`<span class="t">done</span> ${res.ok ? 'answer accepted' : 'flagged as unsure'} · the best <i>different</i> pose fits ${fmt(100 * res.ambiguity)}% as well as the winner ${res.ambiguity < Core.PLAN.AMBIG ? '(under 90%, so the winner is clear)' : '(90% or more: too close to call)'}`);
+  const err = Core.regError(res.T, ST.ev);
+  toast(`Locked on: ${err < 1 ? fmt(err * 100, 1) + ' cm' : fmt(err, 1) + ' m'} from the truth`);
+  camHome(); busy(false); renderRail();
+}
+
+const ghosts = [];
+function clearGhosts() { for (const g of ghosts) { scene.remove(g.grp); g.geo.dispose(); } ghosts.length = 0; }
+
+// 6 -- clutter removal: simple colour filter live; DART only as its recorded run
+const CLUTTER_NAME = { scaffold: 'scaffold', crane: 'crane', fence: 'fence', props: 'props', pile: 'piles', worker: 'workers' };
+function clutterBreakdown(gt, keep) {   // eval only: what kind of thing each point really is
+  const r = { structure: [0, 0], ground: [0, 0], clutter: [0, 0], floater: [0, 0] };
+  for (let i = 0; i < gt.length; i++) {
+    const g = gt[i], k = g >= 0 ? 'structure' : g === -2 || g === -3 ? 'ground' : g <= -10 ? 'clutter' : 'floater';
+    r[k][keep && !keep[i] ? 1 : 0]++;
+  }
+  return r;
+}
+step({
+  title: 'Clean the scan', kicker: 'Clutter removal', done: () => !!ST.cloudF,
+  text: 'A site scan also hits the ground, trees, scaffolding, the crane, the fence and shoring props. None of that is in the design. Two simple removals run live. By distance: once the scan is aligned we know where the design is, so every point more than 15 cm from a design surface goes. By colour: points whose colour fits no design material go. Clutter right against a wall survives both. The stronger fix, DART, reads the camera photos with an AI model; it cannot run in a browser, so its recorded run is shown instead.',
+  how: '<b>by distance</b> keep points within 15 cm of the design, after alignment (step 5) · matching itself uses 8 cm<br><b>by colour</b> color_registration.py: point colour vs the design\'s catalogue colours (hue only) · keep if any material fits<br><b>DART</b> dart_label.py: SAM3 text prompts on the photos ("wall", "floor" vs "scaffolding", "machine", "worker") · recorded on stage 11',
+  enter() {
+    ensureScan(); if (!ST.cloud) throwCloud(ST.seed);
+    const cl = usedCloud(); fillCloud(scanCloud, cl.xyz, cl.rgb); setPose(scanCloud, ST.plan ? ST.plan.T : M.eye());
+    if (buildingMesh) buildingMesh.visible = false; holo.material.opacity = 0.3; camHome();
+    const D = bim.recorded.dart;
+    hud.innerHTML = `<h3>Clutter removal <span>live</span></h3>` + statsHTML([['points removed', '–', 'hot', 'cfR'], ['not-building removed', '–', 'good', 'cfC'], ['building removed', '–', 'bad', 'cfS'], ['not-building left', '–', 'warn', 'cfL']]) +
+      `<div class="note" id="cfNote">Run a removal to see what it takes out. "Not-building" means ground, trees, site clutter and stray points; the split is a truth check the method never sees.${ST.site === 'busy' ? '' : ' This scan is from the <b>clean</b> site; pick <b>Busy</b> in step 2 for scaffolding, crane, fence and props.'}</div>` +
+      (D ? `<h3>DART, stage 11 <span class="rec">recorded run</span></h3>
+        <img class="shot" id="dartImg" alt="DART on a camera image: photo, DART classes, view after removal, merged cloud" src="data:image/jpeg;base64,${D.images[0]}">
+        <div class="controls"><button class="btn" type="button" id="dartNext">Next picture</button></div>
+        <table class="mini"><tr><th>indoor cloud, stage 11</th><th>estimate</th><th>truth</th></tr>
+        ${[['interior', 'raycast scan, no removal'], ['interior_img', 'from photos, no removal'], ['interior_dartc', 'photos + DART removes clutter'], ['interior_dart', 'photos + DART keeps only structure']].filter(([k]) => D.runs[k]).map(([k, t]) => `<tr><td>${t}</td><td>${fmt(D.runs[k].est, 1)}%</td><td>${fmt(D.runs[k].gt, 1)}%</td></tr>`).join('')}</table>
+        <div class="note">From results/dart and results/experiments/main_table_interior*.csv. ${D.stats.interior_dartc ? `DART removed ${fmt(100 * D.stats.interior_dartc.clutter_removed)}% of the clutter points and kept ${fmt(100 * D.stats.interior_dartc.structure_recall, 1)}% of the structure. ` : ''}Most of the gap to the truth comes from building the cloud from photos, not from DART.</div>`
+      : `<div class="note">No DART run data in this repo, so only the simple filter is shown.</div>`);
+    ctl(`<button class="btn primary" id="cfDist" type="button">Remove far from design</button><button class="btn" id="cfRun" type="button">Remove by colour</button><button class="btn" id="cfUndo" type="button">Keep everything</button>`);
+    if (D) { let k = 0; $('#dartNext').onclick = () => { k = (k + 1) % D.images.length; $('#dartImg').src = `data:image/jpeg;base64,${D.images[k]}`; }; }
+    const show = keep => {
+      const b = clutterBreakdown(ST.ev.gtElem, keep), removed = keep ? keep.length - keep.reduce((a, v) => a + v, 0) : 0;
+      const nbGone = b.ground[1] + b.clutter[1] + b.floater[1], nbAll = nbGone + b.ground[0] + b.clutter[0] + b.floater[0];
+      setV('cfR', fmt(removed)); setV('cfC', `${fmt(nbGone)}<small>/ ${fmt(nbAll)}</small>`); setV('cfS', fmt(b.structure[1])); setV('cfL', fmt(nbAll - nbGone));
+      return b;
+    };
+    if (ST.cloudF) show(ST.cloudF.keep);
+    $('#cfUndo').onclick = () => { ST.cloudF = null; ST.match = ST.vis = ST.score = null; fillCloud(scanCloud, ST.cloud.xyz, ST.cloud.rgb); ['cfR', 'cfC', 'cfS', 'cfL'].forEach(k => setV(k, '–')); renderRail(); toast('Using the full scan'); };
+    // each removal works on what is left (the two stack); keep[] always refers to the full scan
+    const apply = async (drop, label) => {
+      const keep = ST.cloudF ? ST.cloudF.keep.slice() : new Uint8Array(ST.cloud.xyz.length / 3).fill(1), n = keep.length;
+      fillCloud(scanCloud, ST.cloud.xyz, ST.cloud.rgb);
+      const A = scanCloud.geo.attributes.acol.array, before = keep.reduce((a, v) => a + v, 0);
+      for (let i = 0; i < n; i++) if (keep[i] && drop[i]) { keep[i] = 0; A.set([255, 95, 180], 3 * i); }   // flag what goes, then drop it
+      for (let i = 0; i < n; i++) if (!keep[i] && !drop[i]) A.set([0, 0, 0], 3 * i);
+      scanCloud.geo.attributes.acol.needsUpdate = true;
+      toast(label); await sleep(1600);
+      const idx = []; keep.forEach((k, i) => k && idx.push(i));
+      const xyz = new Float32Array(idx.length * 3), rgb = new Uint8Array(idx.length * 3), gt = new Int32Array(idx.length);
+      idx.forEach((j, i) => { xyz.set(ST.cloud.xyz.subarray(3 * j, 3 * j + 3), 3 * i); rgb.set(ST.cloud.rgb.subarray(3 * j, 3 * j + 3), 3 * i); gt[i] = ST.ev.gtElem[j]; });
+      ST.cloudF = { xyz, rgb, gt, keep }; ST.match = ST.vis = ST.score = null;
+      fillCloud(scanCloud, xyz, rgb);
+      toast(`${fmt(before - idx.length)} points removed`); renderRail();
+      return show(keep);
+    };
+    $('#cfDist').onclick = async () => {
+      busy(true);
+      if (!ST.plan) {   // needs the alignment from step 5
+        toast('Aligning the scan first (step 5)…');
+        let res; await runSliced(Core.planSearch(model, ST.cloud.xyz), ev => { if (ev.phase === 'done') res = ev; }, 14);
+        ST.plan = res; setPose(scanCloud, res.T);
+      }
+      const xyzB = M.apply(ST.plan.T, ST.cloud.xyz), n = xyzB.length / 3, drop = new Uint8Array(n);
+      for (let i = 0; i < n; i += 4000) {
+        for (let k = i; k < Math.min(n, i + 4000); k++) drop[k] = model.bvh.closest(xyzB[3 * k], xyzB[3 * k + 1], xyzB[3 * k + 2], 0.15, -1) === Infinity ? 1 : 0;
+        await new Promise(r => requestAnimationFrame(r));
+      }
+      const b = await apply(drop, 'Pink: more than 15 cm from any design surface');
+      $('#cfNote').innerHTML = `Ground, trees, the crane, the fence and most of the scaffold are away from the walls, so they go. ${fmt(b.ground[0] + b.clutter[0] + b.floater[0])} not-building points are left: scaffold standards and props right against walls and slabs, and noise next to the surfaces. Matching in the next step uses an even tighter 8 cm.`;
+      busy(false);
+    };
+    $('#cfRun').onclick = async () => {
+      busy(true);
+      const keep = Core.colorFilter(ST.cloud.rgb), drop = keep.map(k => 1 - k);
+      const b = await apply(drop, 'Pink: colour fits no design material');
+      $('#cfNote').innerHTML = `Bright, coloured things go, like the yellow crane and green trees. Grey scaffolding, fence and props look like concrete and the ground looks like brick, so colour cannot tell them apart; ${fmt(b.ground[0] + b.clutter[0] + b.floater[0])} not-building points are left. Colour helps little on its own; the repo found the same (no gain from plan_color).`;
+      busy(false);
+    };
+  },
+});
+
+// 7 -- match points to elements, then the visibility check
+step({
+  title: 'Match and check what is visible', kicker: 'Detection', done: () => !!ST.vis,
+  text: 'Now the scan sits on the design. Each point looks for the nearest design surface. If it is within 8 cm, and no other element is almost as close, the point belongs to that element. Ground, trees and joints between elements stay unassigned. Then a second test asks about each element with no points: if it were built, would the cameras have seen it?',
+  how: '<b>match</b> within 8 cm · 4 cm clear of the next element · 8 points = detected<br><b>visibility</b> replay the scan rays against the design · detected elements block the view<br>≥ 30 expected points but none seen → <b>not started</b>; otherwise <b>unknown</b>',
+  enter() {
+    ensureScan(); if (!ST.cloud) throwCloud(ST.seed);
+    const cl = usedCloud(); fillCloud(scanCloud, cl.xyz, cl.rgb); setPose(scanCloud, ST.plan ? ST.plan.T : M.eye());
+    if (buildingMesh) buildingMesh.visible = false; holo.material.opacity = 0.3; camHome();
+    hud.innerHTML = `<h3>Matching <span id="mph">${ST.cloudF ? 'cleaned scan' : 'full scan'}</span></h3>` + statsHTML([['points matched', '–', 'hot', 'ma'], ['elements detected', '–', 'good', 'md'], ['joint points', '–', '', 'mj'], ['rays replayed', '–', '', 'mr'], ['clutter points', '–', '', 'mc0'], ['clutter matched', '–', 'warn', 'mc1']]) +
+      `<div class="legend"><span><i style="background:${col('--ok')}"></i>detected</span><span><i style="background:#ff5d6c"></i>ray blocked</span><span><i style="background:${col('--cyan')}"></i>ray reaches an empty element</span></div><div class="log" id="log"></div>`;
+    ctl(`<button class="btn primary" id="mrun2" type="button">${ST.vis ? 'Run again' : 'Match the points'}</button>`);
+    $('#mrun2').onclick = () => runMatch();
+  },
+});
+async function runMatch() {
+  busy(true); logLines.length = 0;
+  if (!ST.plan) { log('<span class="t">register</span> running the full search first'); setV('mph', 'registering'); let res; await runSliced(Core.planSearch(model, ST.cloud.xyz), ev => { if (ev.phase === 'done') res = ev; }, 14); ST.plan = res; setPose(scanCloud, res.T); }
+  const cl = usedCloud(), gt = ST.cloudF ? ST.cloudF.gt : ST.ev.gtElem;
+  const T = ST.plan.T, xyzB = M.apply(T, cl.xyz), N = xyzB.length / 3, asg = new Int32Array(N);
+  const A = scanCloud.geo.attributes.acol.array, orig = cl.rgb;
+  setV('mph', 'matching');
+  for (let i = 0; i < N; i += 2500) {
+    const j = Math.min(N, i + 2500); Core.matchPoints(model, bim, xyzB, i, j, asg);
+    for (let k = i; k < j; k++) { const f = asg[k] >= 0 ? 1 : 0.18; A[3 * k] = orig[3 * k] * f; A[3 * k + 1] = orig[3 * k + 1] * f; A[3 * k + 2] = orig[3 * k + 2] * f; }
+    scanCloud.geo.attributes.acol.needsUpdate = true;
+    let na = 0, nj = 0; for (let k = 0; k < j; k++) { if (asg[k] >= 0) na++; else if (asg[k] === -2) nj++; }
+    setV('ma', fmt(100 * na / j) + '<small>%</small>'); setV('mj', fmt(nj));
+    await new Promise(r => requestAnimationFrame(r));
+  }
+  const agg = Core.aggregate(bim, xyzB, asg); let nd = 0; for (const d of agg.det) nd += d;
+  let nc = 0, ncm = 0; for (let k = 0; k < N; k++) if (gt[k] <= -10) { nc++; if (asg[k] >= 0) ncm++; }   // truth check only
+  setV('mc0', fmt(nc)); setV('mc1', nc ? fmt(ncm) + `<small>${fmt(100 * ncm / nc, 1)}%</small>` : '0');
+  setV('md', fmt(nd)); ST.match = { asg, agg, xyzB };
+  log(`<span class="t">match</span> ${fmt(nd)} elements have 8+ points`);
+  statusMesh.visible = true; colourStatus(e => agg.det[e] ? [0.24, 0.86, 0.59] : [0.05, 0.07, 0.1]); statusMesh.material.opacity = 0.55;
+  // visibility, with the ESTIMATED pose (cameras and rays moved by T)
+  setV('mph', 'visibility');
+  const cams = ST.cloud.cams.map(c => { const p = M.apply(T, new Float32Array(c.eye)); return [p[0], p[1], p[2]]; });
+  const vis = new Core.Visibility(bim, model, agg.det, cams, ST.cloud.rayView, M.applyDir(T, ST.cloud.rayDir));
+  let done = false, shown = [];
+  while (!done) {
+    const r = vis.step(700); done = r.done;
+    for (const s of r.sample) {
+      const blocked = s.tOcc < Infinity, t = blocked ? s.tOcc : (s.tCand < Infinity ? s.tCand : 0); if (!t) continue;
+      shown.push([s.o[0], s.o[1], s.o[2], s.o[0] + t * s.d[0], s.o[1] + t * s.d[1], s.o[2] + t * s.d[2], blocked ? 1.6 : 0.35, blocked ? 0.25 : 1.8, blocked ? 0.3 : 2.4]);
+    }
+    shown = shown.slice(-400); setRays(shown);
+    setV('mr', fmt(100 * r.frac) + '<small>%</small>');
+    await new Promise(r => requestAnimationFrame(r));
+  }
+  setRays([]); ST.vis = vis;
+  let nNS = 0, nU = 0; for (let e = 0; e < bim.nE; e++) if (!agg.det[e]) { if (vis.expUndet[e] >= Core.SCORE.VISIBLE_MIN_EXPECTED) nNS++; else nU++; }
+  log(`<span class="t">visibility</span> ${fmt(nNS)} empty elements were in clear view, ${fmt(nU)} could not have been seen`);
+  setV('mph', 'done'); toast(`${fmt(nd)} elements found in the scan`); busy(false); renderRail();
+}
+
+// 7 -- score
+step({
+  title: 'Measure progress', kicker: 'Scoring',
+  done: () => !!ST.score,
+  text: 'For each element we found, we compare the height of its points with the element\'s full height. Half or more counts as complete, a smaller share as part-built. Elements that were in clear view but had no points are not started. Elements nobody could see are left out instead of guessed. Progress is the share of work done, by count and by volume.',
+  how: '<b>coverage</b> ≥ 0.5 complete · 0.15–0.5 part-built (counts as that share)<br><b>noise rule</b> fewer than 10% of the expected points → not a real detection<br><b>truth check</b> compared with the stage answer key, over the same elements',
+  enter() {
+    const R = bim.recorded, mt = bim.mainTable[ST.stage], cm = R.colmap;
+    hud.innerHTML = `<h3>Progress, this stage <span>live · ${ST.site} site · ${ST.sensor} sensor</span></h3>` + statsHTML([['estimate · count', '–', 'hot', 'sc1'], ['truth · count', '–', '', 'sc2'], ['estimate · volume', '–', 'hot', 'sc3'], ['truth · volume', '–', '', 'sc4']]) +
+      (R.calib ? statsHTML([['corrected · 90% range', '–', 'good', 'r5c'], ['volume · 90% range', '–', 'good', 'r5v']]) : '') +
+      `<div class="legend"><span><i style="background:${col('--ok')}"></i>complete</span><span><i style="background:${col('--part')}"></i>part-built</span><span><i style="background:${col('--none')}"></i>not started</span><span><i style="background:${col('--unc')}"></i>unknown (left out)</span></div>` +
+      statsHTML([['complete', '–', 'good', 'n2'], ['part-built', '–', 'warn', 'n1'], ['not started', '–', '', 'n0'], ['unknown', '–', '', 'n3']]) +
+      `<div class="note" id="scoreNote"></div>` +
+      (R.status ? `<h3>Full pipeline, this stage <span class="rec">recorded run</span></h3>` + statsHTML([['pipeline estimate', fmt(mt.progress_est_count, 1) + '<small>%</small>', 'hot'], ['truth', fmt(mt.progress_gt_count, 1) + '<small>%</small>']]) +
+        `<div class="controls"><button class="btn" type="button" id="realRun">Colour by the real run</button></div><div class="note">Busy site, realistic sensor, GPS-sized offset, ~5× denser scan (data/status, results/main_table.csv).</div>` : '') +
+      `<h3>All 16 stages, full pipeline <span>results/main_table.csv</span></h3>${chartCanvas('stageChart')}
+      <div class="legend"><span><i style="background:${col('--ok')}"></i>truth</span><span><i style="background:${col('--cyan')}"></i>pipeline estimate</span><span><i style="background:${col('--orange')}"></i>this browser run</span></div>` +
+      (cm ? `<h3>Cloud from photos (COLMAP) <span class="rec">recorded run</span></h3>
+        <table class="mini"><tr><th>stage 07 cloud</th><th>estimate</th><th>truth</th></tr>
+        <tr><td>COLMAP from 60 drone photos</td><td>${fmt(cm.tables.sfm.progress_est_count, 1)}%</td><td>${fmt(cm.tables.sfm.progress_gt_count, 1)}%</td></tr>
+        <tr><td>perfect 3D from the same photos</td><td>${fmt(cm.tables.sfm_ideal.progress_est_count, 1)}%</td><td>${fmt(cm.tables.sfm_ideal.progress_gt_count, 1)}%</td></tr>
+        <tr><td>raycast drone + indoor scan</td><td>${fmt(bim.mainTable[7].progress_est_count, 1)}%</td><td>${fmt(bim.mainTable[7].progress_gt_count, 1)}%</td></tr></table>
+        <div class="controls"><button class="btn" type="button" id="colmapBtn">Show the COLMAP cloud</button></div>
+        <div class="note">sfm_experiment.py with pycolmap on a GPU (~28 min), so it cannot run here. The cloud is placed by the pipeline's own registration.</div>` : '') +
+      (R.ladder ? `<h3>What each change did <span>mean error, points</span></h3>${chartCanvas('ladder')}<div class="note">results/improvement_ladder.csv: average gap between estimate and truth over the 16 stages.</div>` : '');
+    ctl(`<button class="btn primary" id="srun" type="button">Score this stage</button><button class="btn" id="restart" type="button">Start over</button>`);
+    $('#restart').onclick = () => go(0);
+    if (R.status) $('#realRun').onclick = () => {
+      const on = $('#realRun').dataset.on !== '1'; $('#realRun').dataset.on = on ? '1' : '0';
+      $('#realRun').textContent = on ? 'Back to this browser run' : 'Colour by the real run';
+      if (!on && ST.score) { doScore(); return; }
+      const st = bim.recordedStatus(ST.stage), cs = [col('--none'), col('--part'), col('--ok'), col('--unc')].map(h => new THREE.Color(h));
+      statusMesh.visible = true; statusMesh.material.opacity = 0.95; if (buildingMesh) buildingMesh.visible = false; scanCloud.mat.uniforms.uOpacity.value = 0.15;
+      colourStatus(e => { const c = cs[st[e]]; return [c.r, c.g, c.b]; }); toast('Colours from the full pipeline run');
+    };
+    if (cm) $('#colmapBtn').onclick = () => showColmap($('#colmapBtn'));
+    drawLadder();
+    $('#srun').onclick = async () => {
+      if (!ST.vis) { busy(true); toast('Matching first…'); await runMatch(); busy(false); }
+      doScore();
+    };
+    drawStages();
+    if (ST.vis) doScore(); else { ensureScan(); if (buildingMesh) buildingMesh.visible = true; camHome(); }
+  },
+});
+function doScore() {
+  const sc = Core.score(bim, ST.match.agg, ST.vis), gt = Core.truthProgress(bim, ST.stage, sc.status, ST.ev); ST.score = { sc, gt };
+  if (bim.recorded.calib) for (const [w, id] of [['count', 'r5c'], ['volume', 'r5v']]) {
+    const r = Core.calibrated(bim, sc, ST.match.agg, ST.vis, bim.recorded.calib, w);
+    setV(id, `${fmt(r.est, 1)}<small>${fmt(Math.max(0, r.lo), 1)}–${fmt(Math.min(100, r.hi), 1)}</small>`);
+  }
+  const cs = [col('--none'), col('--part'), col('--ok'), col('--unc')].map(h => new THREE.Color(h));
+  statusMesh.visible = true; statusMesh.material.opacity = 0.95; if (buildingMesh) buildingMesh.visible = false;
+  colourStatus(e => { const c = cs[sc.status[e]]; return [c.r, c.g, c.b]; });
+  scanCloud.mat.uniforms.uOpacity.value = 0.25;
+  const n = [0, 0, 0, 0]; for (const s of sc.status) n[s]++;
+  setV('sc1', fmt(sc.progressCount, 1) + '<small>%</small>'); setV('sc2', fmt(gt.progressCount, 1) + '<small>%</small>'); setV('sc3', fmt(sc.progressVolume, 1) + '<small>%</small>'); setV('sc4', fmt(gt.progressVolume, 1) + '<small>%</small>');
+  setV('n2', fmt(n[2])); setV('n1', fmt(n[1])); setV('n0', fmt(n[0])); setV('n3', fmt(n[3]));
+  const note = $('#scoreNote');
+  if (note) note.innerHTML = `This run: off by <b>${fmt(Math.abs(sc.progressCount - gt.progressCount), 1)} points</b> (count). ${gt.nMissed} built elements were called not started, ${gt.nFalse} empty ones were called built. Most misses are beams hidden behind slabs that share a face with another slab, so those slab points cannot be given to one element and the slab does not count as a blocker.` +
+    (ST.site === 'busy' ? ' On the busy site scaffold and props also hide walls the visibility check thinks are in clear view, and late or wrongly placed elements count as not built.' : '') +
+    (bim.recorded.calib ? ' The corrected value and range use error groups calibrated on the full pipeline\'s denser scans, so here they are a guide.' : '') + ' The full pipeline numbers are the cyan line.';
+  drawStages(); renderRail(); toast(`Progress estimate ${fmt(sc.progressCount, 1)}% · truth ${fmt(gt.progressCount, 1)}%`);
+}
+let colmapCloud = null;
+function showColmap(btn) {   // recorded COLMAP cloud (stage 07), already in the BIM frame
+  const cm = bim.recorded.colmap;
+  if (!colmapCloud) {
+    const b = s => { const t = atob(s), u = new Uint8Array(t.length); for (let i = 0; i < t.length; i++) u[i] = t.charCodeAt(i); return u; };
+    const q = new Uint16Array(b(cm.xyz).buffer), xyz = new Float32Array(q.length);
+    for (let i = 0; i < q.length; i++) xyz[i] = q[i] / 1000 + cm.origin[i % 3];
+    colmapCloud = makeCloud(cm.n, 0.07); fillCloud(colmapCloud, xyz, b(cm.rgb)); setPose(colmapCloud, M.eye()); colmapCloud.grp.visible = false;
+    colmapCloud.mat.uniforms.uScale.value = scanCloud.mat.uniforms.uScale.value;
+  }
+  const on = !colmapCloud.grp.visible; colmapCloud.grp.visible = on;
+  scanCloud.grp.visible = !on; statusMesh.visible = !on && !!ST.score; holo.material.opacity = on ? 0.35 : 0.22;
+  btn.textContent = on ? 'Hide the COLMAP cloud' : 'Show the COLMAP cloud';
+  if (on) toast(`COLMAP cloud, stage 07: ${fmt(cm.n)} of its points`);
+}
+function drawLadder() {   // horizontal bars from results/improvement_ladder.csv
+  const L = bim.recorded.ladder; if (!L) return;
+  const rows = L.filter(r => r.group === 'B').concat(L.filter(r => r.step.includes('error-bar')));
+  lastCharts.ladder = drawLadder;
+  const c = ctx2d('ladder'); if (!c) return;
+  const mx = Math.max(...rows.map(r => r.err)) * 1.15, rowH = (c.H - 8) / rows.length, x0 = 8;
+  rows.forEach((r, i) => {
+    const y = 4 + i * rowH, w = (c.W - 60) * r.err / mx, last = r.step.includes('error-bar');
+    c.fillStyle = last ? col('--ok') : 'rgba(95,224,255,0.55)'; c.fillRect(x0, y + rowH * 0.52, w, rowH * 0.32);
+    c.fillStyle = col('--fg'); c.textAlign = 'left'; c.fillText(r.step.replace('... + ', '+ ').replace(' (R5)', '').slice(0, 52), x0, y + rowH * 0.42);
+    c.fillStyle = col('--muted'); c.fillText(fmt(r.err, 2), x0 + w + 6, y + rowH * 0.78);
+  });
+}
+function drawStages() {
+  const t = bim.mainTable;
+  const marks = ST.score ? [{ x: ST.stage, y: ST.score.sc.progressCount, color: col('--orange'), r: 5, label: 'browser ' + fmt(ST.score.sc.progressCount, 1) + '%' }] : [];
+  lineChart('stageChart', { x0: 0, x1: 15, y0: 0, y1: 100, xTicks: [0, 5, 10, 15], xFmt: v => 'stage ' + v, yTicks: [0, 50, 100], yFmt: v => v + '%',
+    series: [{ pts: t.map((r, i) => [i, r.progress_gt_count]), color: col('--ok'), width: 2.4 }, { pts: t.map((r, i) => [i, r.progress_est_count]), color: col('--cyan'), width: 1.4, dash: [4, 3], dots: 2 }], marks });
+}
+
+// ---------------- loop ----------------
+function resize() {
+  const w = view.clientWidth, h = view.clientHeight;
+  renderer.setSize(w, h, false); composer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
+  const s = h / (2 * Math.tan(camera.fov * Math.PI / 360)) * renderer.getPixelRatio();
+  scanCloud.mat.uniforms.uScale.value = s; for (const g of ghosts) g.mat.uniforms.uScale.value = s;
+  ghostScale = s;
+}
+let ghostScale = 800;
+addEventListener('resize', resize);
+renderer.domElement.addEventListener('pointerdown', () => { controls.autoRotate = false; camAnim = null; });
+const clock = new THREE.Clock();
+function loop() {
+  const dt = clock.getDelta();
+  if (camAnim) camAnim();
+  controls.update();
+  for (const g of ghosts) g.mat.uniforms.uScale.value = ghostScale;
+  if (colmapCloud) colmapCloud.mat.uniforms.uScale.value = ghostScale;
+  if (drone.visible) drone.children.forEach((c, i) => { if (i > 0 && i < 5) c.rotation.z += dt * 30; });
+  if (tripod.visible) tripod.userData.ring.rotation.x += dt * 4;
+  composer.render();
+  requestAnimationFrame(loop);
+}
+showStage(ST.stage);
+resize();
+go(0);
+loop();
+document.getElementById('loading').classList.add('gone');
+</script>
