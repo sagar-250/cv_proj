@@ -1,0 +1,21 @@
+{
+ "median_dist_true_fit_m": 0.00463584391400218,
+ "share_within_5cm_true_fit": 0.901205446941522,
+ "share_within_10cm_true_fit": 0.9957744236863812,
+ "completeness_within_10cm_true_fit": 0.07410564773938194,
+ "stage": "07_01_eerste_verdieping_interior",
+ "cloud": "dense",
+ "n_points": 207603,
+ "n_images": 26,
+ "n_images_total": 72,
+ "camera_fit_rms_to_gnss_m": null,
+ "scale_to_survey": 1.0712176186827393,
+ "camera_pos_error_m": 0.027076066455543855,
+ "median_dist_to_surface_m": 0.00463584391400218,
+ "p90_dist_to_surface_m": 0.04937010258436203,
+ "share_within_5cm": 0.901205446941522,
+ "share_within_10cm": 0.9957744236863812,
+ "share_points_near_building": 0.9985838354937068,
+ "surface_seen_by_cameras_m2_share": 0.164225,
+ "completeness_within_10cm_of_seen_surface": 0.07410564773938194
+}

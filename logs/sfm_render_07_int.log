@@ -1,0 +1,10 @@
+interior: floor top z=0.0 m, 18 usable standing positions, 18 used, 72 photos
+  image 1/72 (2s)
+  image 11/72 (19s)
+  image 21/72 (34s)
+  image 31/72 (49s)
+  image 41/72 (66s)
+  image 51/72 (80s)
+  image 61/72 (95s)
+  image 71/72 (111s)
+rendered 72 photos -> data/sfm/07_01_eerste_verdieping_interior_int/images

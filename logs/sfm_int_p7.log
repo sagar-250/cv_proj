@@ -1,0 +1,6 @@
+Coverage mask: per-stage visibility (>= 30 expected points)
+                           stage  progress_est_count  progress_est_volume  progress_gt_count  progress_gt_volume  error_count  error_volume  n_uncertain  n_completed  n_partial  n_not_started  signed_error_count  registration_ok  registration_err_m  n_rejected_few_points  n_missed_built  n_false_built  n_uncertain_built  n_uncertain_unbuilt  n_late  n_late_called_built  n_misplaced  n_misplaced_called_built
+07_01_eerste_verdieping_interior            9.686523            18.755289          69.468381           53.125103    59.781858     34.369814         1060           27          5            263          -59.781858             True           11.748389                     14             185              0                673                  387       0                    0            0                         0
+
+Wrote results/experiments/main_table_sfm_int.csv
+Wrote results/figures/p7_progress_error_sfm_int.png
